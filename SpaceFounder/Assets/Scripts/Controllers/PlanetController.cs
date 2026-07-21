@@ -23,12 +23,27 @@ public class PlanetController : MonoBehaviour
     [SerializeField] 
     private List<SatelliteData> satellites = new List<SatelliteData>();
 
-    public void UpdateSnapshot(Vector3 serverPos, Vector3 serverVel)
+    private const float SECTOR_SIZE = 1000f; 
+
+    // 카메라의 현재 섹터 정보를 함께 받아 상대 좌표 연산 수행
+    public void UpdateSnapshot(Vector3Int planetSector, Vector3 planetLocalPos, Vector3 serverVel, Vector3Int cameraSector)
     {
-        if (!isInitialized || Vector3.Distance(transform.position, serverPos) > 100f)
+        // 카메라 상대 좌표가 아닌, 월드 절대 좌표로 계산
+        Vector3 absolutePos = new Vector3(
+            (planetSector.x * SECTOR_SIZE) + planetLocalPos.x,
+            (planetSector.y * SECTOR_SIZE) + planetLocalPos.y,
+            (planetSector.z * SECTOR_SIZE) + planetLocalPos.z
+        );
+
+        if (float.IsNaN(absolutePos.x) || float.IsNaN(absolutePos.y) || float.IsNaN(absolutePos.z))
         {
-            transform.position = serverPos;
-            networkPosition = serverPos;
+            return;
+        }
+
+        if (!isInitialized || Vector3.Distance(transform.position, absolutePos) > 100f)
+        {
+            transform.position = absolutePos;
+            networkPosition = absolutePos;
             networkVelocity = serverVel;
             visualOffset = Vector3.zero;
             isInitialized = true;
@@ -36,10 +51,8 @@ public class PlanetController : MonoBehaviour
         }
 
         Vector3 currentVisualPos = transform.position;
-
-        networkPosition = serverPos;
+        networkPosition = absolutePos;
         networkVelocity = serverVel;
-
         visualOffset = currentVisualPos - networkPosition;
     }
 
@@ -50,9 +63,7 @@ public class PlanetController : MonoBehaviour
         float dt = Time.deltaTime;
 
         networkPosition += networkVelocity * dt;
-
         visualOffset = Vector3.Lerp(visualOffset, Vector3.zero, dt * smoothSpeed);
-
         transform.position = networkPosition + visualOffset;
 
         if (satellites.Count > 0)

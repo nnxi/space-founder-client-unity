@@ -5,7 +5,8 @@ using UnityEngine;
 public struct DecodedPlanetSnapshot
 {
     public ushort id;
-    public Vector3 position;
+    public Vector3Int sectorIndex; 
+    public Vector3 localPosition;  
     public Vector3 velocity;
 }
 
@@ -17,11 +18,10 @@ public struct DecodedWorldUpdatePacket
 
 public static class WorldPacketDecoder
 {
-    // 상수 정의 (constants.ts)
     public const int HEADER_BYTES = 8;
-    public const int PLANET_BYTES = 26;
+    // ushort(2) + Int32x3(12) + floatx3(12) + floatx3(12) = 38바이트
+    public const int PLANET_BYTES = 38; 
 
-    // 패킷 디코딩 함수 (decoder.ts)
     public static DecodedWorldUpdatePacket Decode(byte[] rawData)
     {
         if (rawData == null || rawData.Length < HEADER_BYTES)
@@ -41,10 +41,17 @@ public static class WorldPacketDecoder
             {
                 ushort id = reader.ReadUInt16();
 
-                float posX = reader.ReadSingle();
-                float posY = reader.ReadSingle();
-                float posZ = reader.ReadSingle();
+                // 32비트 정수 섹터 인덱스 (12바이트)
+                int secX = reader.ReadInt32();
+                int secY = reader.ReadInt32();
+                int secZ = reader.ReadInt32();
 
+                // 32비트 실수 로컬 좌표 (12바이트)
+                float locX = reader.ReadSingle();
+                float locY = reader.ReadSingle();
+                float locZ = reader.ReadSingle();
+
+                // 32비트 실수 속도 벡터 (12바이트)
                 float velX = reader.ReadSingle();
                 float velY = reader.ReadSingle();
                 float velZ = reader.ReadSingle();
@@ -52,7 +59,8 @@ public static class WorldPacketDecoder
                 planets[i] = new DecodedPlanetSnapshot
                 {
                     id = id,
-                    position = new Vector3(posX, posY, posZ),
+                    sectorIndex = new Vector3Int(secX, secY, secZ),
+                    localPosition = new Vector3(locX, locY, locZ),
                     velocity = new Vector3(velX, velY, velZ)
                 };
             }
