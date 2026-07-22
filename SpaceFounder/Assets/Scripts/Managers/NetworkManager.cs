@@ -33,8 +33,10 @@ public struct PlayerInitData
 [Serializable]
 public struct StaticPlanetData
 {
-    public int id { get; set; }
-    public string name { get; set; }
+    public int planetId { get; set; }
+    public string planetName { get; set; }
+    public string userType { get; set; }
+    public string username { get; set; }
     public string colorHex { get; set; }
     public string planetType { get; set; }
     public int constellationId { get; set; }

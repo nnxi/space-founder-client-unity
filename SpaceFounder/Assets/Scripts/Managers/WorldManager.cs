@@ -44,7 +44,7 @@ public class WorldManager : MonoBehaviour
 
         foreach (var sp in staticPlanets)
         {
-            staticDataMap[sp.id] = sp;
+            staticDataMap[sp.planetId] = sp;
         }
     }
 
@@ -112,7 +112,6 @@ public class WorldManager : MonoBehaviour
                 if (planetId == myPlanetId && MyPlanet == null)
                 {
                     MyPlanet = planetObj;
-                    Debug.Log("WorldManager.cs 115 내 행성 저장됨.");
                 }
             }
             else
@@ -131,16 +130,20 @@ public class WorldManager : MonoBehaviour
 
                 if (staticDataMap.TryGetValue(planetId, out StaticPlanetData staticData))
                 {
-                    if (!string.IsNullOrEmpty(staticData.colorHex) && ColorUtility.TryParseHtmlString(staticData.colorHex, out Color parsedColor))
+                    PlanetShader shaderComp = newPlanet.GetComponent<PlanetShader>();
+
+                    if (shaderComp != null)
                     {
-                        Renderer rend = newPlanet.GetComponent<Renderer>();
-                        if (rend != null) rend.material.color = parsedColor;
+                        shaderComp.ApplyShader(planetId, staticData.planetType, staticData.colorHex);
                     }
-                    newPlanet.name = $"Planet_{planetId}_{staticData.name}";
+                }
+
+                if (staticData.userType == "default") {
+                    newPlanet.name = $"default_{planetId}_{staticData.planetName}";
                 }
                 else
                 {
-                    newPlanet.name = $"Planet_{planetId}";
+                    newPlanet.name = $"user_{planetId}_{staticData.planetName}";
                 }
 
                 TrailRenderer trail = newPlanet.GetComponent<TrailRenderer>();
