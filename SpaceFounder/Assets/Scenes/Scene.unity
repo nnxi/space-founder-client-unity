@@ -5112,7 +5112,7 @@ MonoBehaviour:
   normalSpeed: 50
   boostMultiplier: 3
   mouseSensitivity: 2
-  zoomSpeed: 500
+  zoomSpeed: 10
   movementSmoothness: 3
   rotationSmoothness: 10
   initialDistance: 10

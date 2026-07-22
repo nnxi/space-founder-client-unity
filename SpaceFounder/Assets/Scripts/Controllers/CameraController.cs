@@ -17,10 +17,10 @@ public class CameraController : MonoBehaviour
     [SerializeField] private float normalSpeed = 50f;
     [SerializeField] private float boostMultiplier = 3f;
     [SerializeField] private float mouseSensitivity = 2f;
-    [SerializeField] private float zoomSpeed = 500f;
+    [SerializeField] private float zoomSpeed = 10f;
 
     [Header("Smooth Settings")]
-    [SerializeField] private float movementSmoothness = 3.5f;
+    [SerializeField] private float movementSmoothness = 3f;
     [SerializeField] private float rotationSmoothness = 10f;
 
     [Header("Focus & Zoom Settings")]
