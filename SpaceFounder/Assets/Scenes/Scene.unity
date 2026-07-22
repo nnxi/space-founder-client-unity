@@ -5107,13 +5107,17 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: affc78b5ed87ea74a8deb15692ec8edd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CameraController
+  currentMode: 0
+  orbitSpeed: 15
   normalSpeed: 50
   boostMultiplier: 3
   mouseSensitivity: 2
-  zoomSpeed: 2000
+  zoomSpeed: 500
   movementSmoothness: 3
   rotationSmoothness: 10
-  initialDistance: 200
+  initialDistance: 10
+  minDistance: 2
+  maxDistance: 70
 --- !u!114 &330585549
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -5158,6 +5162,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::WorldManager
   planetPrefab: {fileID: 5802078565419502550, guid: 99aba168a85af3644aee1dd8f5234924, type: 3}
   scaleFactor: 0.01
+  sectorSize: 1000
 --- !u!4 &390598942
 Transform:
   m_ObjectHideFlags: 0

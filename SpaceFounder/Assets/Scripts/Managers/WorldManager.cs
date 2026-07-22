@@ -81,7 +81,6 @@ public class WorldManager : MonoBehaviour
 
     private void ProcessWorldUpdate(DecodedPlanetSnapshot[] planets)
     {
-        Debug.Log("WorldManager.cs 84 ProcessWorldUpdate 호출됨.");
         if (planetPrefab == null)
         {
             Debug.LogError("[WorldManager] PlanetPrefab is not assigned.");

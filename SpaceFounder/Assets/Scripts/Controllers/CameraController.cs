@@ -14,7 +14,7 @@ public class CameraController : MonoBehaviour
     [SerializeField] private float orbitSpeed = 15f; // Orbit 모드 시 자동 회전 속도
 
     [Header("Speed Settings")]
-    [SerializeField] private float normalSpeed = 100f;
+    [SerializeField] private float normalSpeed = 50f;
     [SerializeField] private float boostMultiplier = 3f;
     [SerializeField] private float mouseSensitivity = 2f;
     [SerializeField] private float zoomSpeed = 500f;
@@ -24,9 +24,9 @@ public class CameraController : MonoBehaviour
     [SerializeField] private float rotationSmoothness = 10f;
 
     [Header("Focus & Zoom Settings")]
-    [SerializeField] private float initialDistance = 500f;
-    [SerializeField] private float minDistance = 50f;
-    [SerializeField] private float maxDistance = 3000f;
+    [SerializeField] private float initialDistance = 10f;
+    [SerializeField] private float minDistance = 2f;
+    [SerializeField] private float maxDistance = 70f;
 
     private Transform targetPlanet;
     private float currentDistance;
@@ -38,8 +38,6 @@ public class CameraController : MonoBehaviour
     private float targetRotationY;
     private float currentRotationX;
     private float currentRotationY;
-
-    private bool isCameraPositionSet = false;
 
     private bool hasFocusedOnMyPlanet = false;
 
@@ -73,49 +71,50 @@ public class CameraController : MonoBehaviour
     private void TryFocusOnMyPlanet()
     {
         if (WorldManager.Instance.MyPlanet == null) return;
-/*
-        int myPlanetId = NetworkManager.Instance.MyPlanetId;
-        
-        // 1. 아직 player:init을 받지 못했다면 절대 실행하지 않고 대기
-        if (myPlanetId == -1) return;
 
-        // 2. 서버에서 mySector 패킷을 정상 수신했는지 확인 후 1회 세팅
-        if (!isCameraPositionSet)
-        {
-            Vector3Int initialSector = WorldManager.Instance.CurrentCameraSector;
-
-            // 카메라 위치를 서버에서 받은 실제 섹터 절대 위치로 이동
-            transform.position = new Vector3(
-                initialSector.x * 1000f,
-                initialSector.y * 1000f,
-                initialSector.z * 1000f
-            );
-
-            // 이동 완료 후 1차 구독 개시
-            CameraChunkTracker tracker = GetComponent<CameraChunkTracker>();
-            if (tracker != null)
-            {
-                tracker.InitializeTracker();
-            }
-
-            isCameraPositionSet = true;
-        }
-*/
-        // 3. 내 행성 오브젝트가 생성되면 포커싱
         GameObject myPlanet = WorldManager.Instance.MyPlanet;
-        if (myPlanet != null)
-        {
-            targetPlanet = myPlanet.transform;
-            
-            targetRotationX = 45f;
-            targetRotationY = 30f;
-            currentRotationX = targetRotationX;
-            currentRotationY = targetRotationY;
-            currentDistance = initialDistance;
+        
+        Vector3 planetPos = myPlanet.transform.position;
+        Vector3Int currentSector = WorldManager.Instance.CurrentCameraSector;
 
-            UpdateOrbitalPosition(true);
-            hasFocusedOnMyPlanet = true;
+        // 유니티 스케일이 적용된 섹터 크기 (100000 * 0.01 = 1000f)
+        float scaledSectorSize = 1000f;
+
+        // 섹터의 중심 좌표 계산
+        Vector3 sectorCenter = new Vector3(
+            currentSector.x * scaledSectorSize,
+            currentSector.y * scaledSectorSize,
+            currentSector.z * scaledSectorSize
+        );
+
+        // 행성 위치에서 섹터 중심을 향하는 방향 벡터 계산
+        Vector3 directionToCenter = (sectorCenter - planetPos).normalized;
+
+        // 행성이 정확히 섹터 중심에 위치해 방향 벡터가 0이 될 경우의 방어 로직
+        if (directionToCenter.sqrMagnitude == 0f)
+        {
+            directionToCenter = Vector3.one.normalized;
         }
+
+        // 카메라가 행성을 바라봐야 하므로 시선 방향은 반대(-directionToCenter)
+        Quaternion lookRotation = Quaternion.LookRotation(-directionToCenter);
+
+        targetPlanet = myPlanet.transform;
+        
+        // 수동으로 좌표를 지정하는 대신, 계산된 방향을 오르빗 카메라의 회전값으로 변환
+        targetRotationX = lookRotation.eulerAngles.y;
+        targetRotationY = lookRotation.eulerAngles.x;
+
+        // Unity의 Euler 각도 보정 (180도를 넘어가면 음수로 변환하여 제한 범위와 맞춤)
+        if (targetRotationY > 180f) targetRotationY -= 360f;
+
+        currentRotationX = targetRotationX;
+        currentRotationY = targetRotationY;
+        currentDistance = initialDistance;
+
+        // UpdateOrbitalPosition이 위에서 설정한 각도와 거리를 바탕으로 카메라를 정확한 위치에 세팅함
+        UpdateOrbitalPosition(true);
+        hasFocusedOnMyPlanet = true;
     }
 
     private void HandleModeSwitch()
