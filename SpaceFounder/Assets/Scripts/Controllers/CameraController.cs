@@ -70,7 +70,7 @@ public class CameraController : MonoBehaviour
 
     private void TryFocusOnMyPlanet()
     {
-        if (WorldManager.Instance.MyPlanet == null) return;
+        if (WorldManager.Instance == null || WorldManager.Instance.MyPlanet == null) return;
 
         GameObject myPlanet = WorldManager.Instance.MyPlanet;
         

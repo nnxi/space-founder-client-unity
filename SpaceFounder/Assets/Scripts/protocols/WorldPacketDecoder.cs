@@ -4,7 +4,7 @@ using UnityEngine;
 
 public struct DecodedPlanetSnapshot
 {
-    public ushort id;
+    public int id;
     public Vector3Int sectorIndex; 
     public Vector3 localPosition;  
     public Vector3 velocity;
@@ -19,8 +19,8 @@ public struct DecodedWorldUpdatePacket
 public static class WorldPacketDecoder
 {
     public const int HEADER_BYTES = 8;
-    // ushort(2) + Int32x3(12) + floatx3(12) + floatx3(12) = 38바이트
-    public const int PLANET_BYTES = 38; 
+    // int32(4) + Int32x3(12) + floatx3(12) + floatx3(12) = 40바이트
+    public const int PLANET_BYTES = 40; 
 
     public static DecodedWorldUpdatePacket Decode(byte[] rawData)
     {
@@ -39,7 +39,8 @@ public static class WorldPacketDecoder
 
             for (int i = 0; i < planetCount; i++)
             {
-                ushort id = reader.ReadUInt16();
+                // 32비트 정수로 ID 읽기 (4바이트)
+                int id = reader.ReadInt32();
 
                 // 32비트 정수 섹터 인덱스 (12바이트)
                 int secX = reader.ReadInt32();

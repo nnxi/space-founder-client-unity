@@ -75,7 +75,7 @@ public class NetworkManager : MonoBehaviour
 
     private async void Start()
     {
-        string token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI0OWYwZjVhNi02MGM2LTRkMTctOWI0ZC1iZTE0OGJiNmY2MTYiLCJlbWFpbCI6InNrd29ndXIwM0BnbWFpbC5jb20iLCJpYXQiOjE3ODQ2NDU2MzksImV4cCI6MTc4NDczMjAzOX0.URZD2JoecM70X_5J5NFN0aLgO1IpzaxPEVkoTjnsXE4";
+        string token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI0OWYwZjVhNi02MGM2LTRkMTctOWI0ZC1iZTE0OGJiNmY2MTYiLCJlbWFpbCI6InNrd29ndXIwM0BnbWFpbC5jb20iLCJpYXQiOjE3ODQ3MzMwNjksImV4cCI6MTc4NDgxOTQ2OX0.c9gDRmJMTK-tNL57FIMdexvVjVwaoqAhbKCGEq2uwDA";
 
         var options = new SocketIOOptions
         {
@@ -119,6 +119,7 @@ public class NetworkManager : MonoBehaviour
             {
                 PlayerInitData initData = response.GetValue<PlayerInitData>();
                 MyPlanetId = initData.myPlanetId;
+                Debug.Log($"<color=cyan>[NetworkManager] 1. Received player:init -> MyPlanetId set to: {MyPlanetId}</color>");
                 
                 Vector3Int mySector = new Vector3Int(
                     initData.currentSector.x, 
@@ -135,6 +136,11 @@ public class NetworkManager : MonoBehaviour
                         // 값 전달만 수행. 카메라 제어는 CameraController가 담당.
                         WorldManager.Instance.CurrentCameraSector = mySector;
                     }
+                    CameraChunkTracker tracker = FindObjectOfType<CameraChunkTracker>();
+                    if (tracker != null)
+                    {
+                        tracker.InitializeTracker(mySector);
+                    }
                 });
             }
             catch (Exception ex)
@@ -150,11 +156,16 @@ public class NetworkManager : MonoBehaviour
             {
                 SectorJoinedData joinedData = response.GetValue<SectorJoinedData>();
                 int planetCount = joinedData.staticPlanets != null ? joinedData.staticPlanets.Length : 0;
+                Debug.Log($"<color=yellow>[NetworkManager] 2. Received sector:joined -> Room: {joinedData.room}, StaticPlanets Count: {planetCount}</color>");
                 
                 Debug.Log($"[NetworkManager] sector:joined - room: {joinedData.room}, staticPlanets: {planetCount}ea");
                 
                 if (joinedData.staticPlanets != null) 
                 {
+                    foreach (var p in joinedData.staticPlanets)
+                    {
+                        Debug.Log($"    -> StaticPlanet: ID={p.planetId}, Name={p.planetName}, UserType={p.userType}");
+                    }
                     UnityMainThreadDispatcher.Instance().Enqueue(() =>
                     {
                         WorldManager.Instance.SetStaticData(joinedData.staticPlanets);

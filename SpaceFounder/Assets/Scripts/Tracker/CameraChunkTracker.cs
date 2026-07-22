@@ -3,46 +3,37 @@ using UnityEngine;
 
 public class CameraChunkTracker : MonoBehaviour
 {
-    [SerializeField] private float chunkSize = 1000f; // 유니티 스케일이 적용된 섹터 크기
+    [SerializeField] private float chunkSize = 1000f;
     private Vector3Int currentCenterSector = new Vector3Int(int.MinValue, int.MinValue, int.MinValue);
     
     private bool isInitialSubscribed = false;
-    private bool isCameraTrackingEnabled = false;
+
+    // 🔥 NetworkManager가 player:init 수신 후 명확한 mySector를 전달하며 호출
+    public void InitializeTracker(Vector3Int initialSector)
+    {
+        currentCenterSector = initialSector;
+        SendSectorGridSubscribe(currentCenterSector);
+        isInitialSubscribed = true;
+        Debug.Log($"<color=cyan>[TRACKER INITIALIZED] 내 실제 섹터 기준 구독 요청 완료: {currentCenterSector}</color>");
+    }
 
     private void Update()
     {
         if (NetworkManager.Instance == null || !NetworkManager.Instance.IsConnected) return;
-        if (NetworkManager.Instance.MyPlanetId == -1) return;
-        if (WorldManager.Instance == null) return;
-
-        // 1. 최초 초기화: 내 행성의 섹터 정보가 들어오면 카메라 이동 전에 1차 구독부터 전송
-        if (!isInitialSubscribed)
-        {
-            currentCenterSector = WorldManager.Instance.CurrentCameraSector;
-            SendSectorGridSubscribe(currentCenterSector);
-            isInitialSubscribed = true;
-            return;
-        }
+        
+        // player:init으로 초기 위치를 전달받기 전에는 절대 자율 구독하지 않음
+        if (!isInitialSubscribed) return;
 
         Vector3Int newCenterSector = CalculateSector(transform.position);
 
-        // 2. 카메라 추적 시작 대기 (핵심 방어벽)
-        // 행성이 생성되기 전 카메라는 (0,0,0)에 머물러 있습니다.
-        // 이때 (0,0,0)으로 엉뚱한 구독이 나가는 것을 막기 위해, 카메라가 1차 목적지 섹터로 이동을 완료할 때까지 추적을 보류합니다.
-        if (!isCameraTrackingEnabled)
-        {
-            if (newCenterSector == currentCenterSector)
-            {
-                isCameraTrackingEnabled = true; // 카메라 목적지 안착 확인, 추적 개시
-            }
-            return;
-        }
-
-        // 3. 실제 카메라 이동에 따른 섹터 변경 감지 및 구독
+        // 카메라 이동에 따라 섹터 변경 시에만 신규 구독
         if (newCenterSector != currentCenterSector)
         {
             currentCenterSector = newCenterSector;
-            WorldManager.Instance.CurrentCameraSector = currentCenterSector;
+            if (WorldManager.Instance != null)
+            {
+                WorldManager.Instance.CurrentCameraSector = currentCenterSector;
+            }
             SendSectorGridSubscribe(currentCenterSector);
         }
     }
@@ -58,14 +49,7 @@ public class CameraChunkTracker : MonoBehaviour
 
     private void SendSectorGridSubscribe(Vector3Int center)
     {
-        if (center == Vector3Int.zero)
-        {
-            Debug.LogWarning($"[TRACKER] (0,0,0) 섹터 구독 발송 | 초기화 여부: {isInitialSubscribed} | 카메라 위치: {transform.position}");
-        }
-        else
-        {
-            Debug.Log($"[TRACKER NORMAL] 정상 섹터 구독: {center} | 카메라 위치: {transform.position}");
-        }
+        Debug.Log($"[TRACKER] 섹터 구독 발송: {center} | 카메라 위치: {transform.position}");
 
         List<Vector3Int> gridSectors = new List<Vector3Int>();
 
