@@ -143,6 +143,12 @@ public class WorldManager : MonoBehaviour
                     newPlanet.name = $"Planet_{planetId}";
                 }
 
+                TrailRenderer trail = newPlanet.GetComponent<TrailRenderer>();
+                if (trail != null)
+                {
+                    trail.Clear();
+                }
+
                 activePlanets.Add(planetId, newPlanet);
 
                 // 새로 생성된 객체가 내 행성일 경우 프로퍼티에 할당
