@@ -1,40 +1,47 @@
-using System.Collections.Generic;
 using UnityEngine;
 
 public class CameraChunkTracker : MonoBehaviour
 {
     [SerializeField] private float chunkSize = 1000f;
+    [SerializeField] private CameraController mainCameraController;
     private Vector3Int currentCenterSector = new Vector3Int(int.MinValue, int.MinValue, int.MinValue);
-    
-    private bool isInitialSubscribed = false;
 
-    // 🔥 NetworkManager가 player:init 수신 후 명확한 mySector를 전달하며 호출
-    public void InitializeTracker(Vector3Int initialSector)
-    {
-        currentCenterSector = initialSector;
-        SendSectorGridSubscribe(currentCenterSector);
-        isInitialSubscribed = true;
-        Debug.Log($"<color=cyan>[TRACKER INITIALIZED] 내 실제 섹터 기준 구독 요청 완료: {currentCenterSector}</color>");
-    }
+    private bool isFirst = false;
+
 
     private void Update()
     {
-        if (NetworkManager.Instance == null || !NetworkManager.Instance.IsConnected) return;
+        if (WorldManager.Instance == null) return;
+
+        if (mainCameraController == null || !mainCameraController.HasFocusedOnMyPlanet) return;
         
-        // player:init으로 초기 위치를 전달받기 전에는 절대 자율 구독하지 않음
-        if (!isInitialSubscribed) return;
+        // 내 행성 ID가 할당되기 전(서버 연결 및 초기화 전)에는 감지 중지
+        if (WorldManager.Instance.MyPlanetId == -1) return;
 
         Vector3Int newCenterSector = CalculateSector(transform.position);
 
-        // 카메라 이동에 따라 섹터 변경 시에만 신규 구독
+        // 방어 로직: 카메라는 아직 (0,0,0)에 있는데 내 실제 섹터가 (0,0,0)이 아닐 경우
+        // 이는 행성이 생성되기 전이나 카메라 워프가 완료되지 않은 찰나의 상태이므로 무시
+        if (WorldManager.Instance.MyPlanet == null && 
+            newCenterSector == Vector3Int.zero && 
+            WorldManager.Instance.CurrentCameraSector != Vector3Int.zero)
+        {
+            return; 
+        }
+
+        // 최초 1회 동기화
+        // WorldManager가 통신을 통해 먼저 세팅해둔 내 섹터 값을 그대로 수용하여 중복 구독 방지
+        if (currentCenterSector.x == int.MinValue)
+        {
+            currentCenterSector = WorldManager.Instance.CurrentCameraSector;
+            return;
+        }
+
+        // 카메라 이동으로 실제 섹터가 바뀌었을 때만 WorldManager에 알림
         if (newCenterSector != currentCenterSector)
         {
             currentCenterSector = newCenterSector;
-            if (WorldManager.Instance != null)
-            {
-                WorldManager.Instance.CurrentCameraSector = currentCenterSector;
-            }
-            SendSectorGridSubscribe(currentCenterSector);
+            WorldManager.Instance.UpdateCameraSector(currentCenterSector, false);
         }
     }
 
@@ -45,25 +52,5 @@ public class CameraChunkTracker : MonoBehaviour
             Mathf.FloorToInt(pos.y / chunkSize),
             Mathf.FloorToInt(pos.z / chunkSize)
         );
-    }
-
-    private void SendSectorGridSubscribe(Vector3Int center)
-    {
-        Debug.Log($"[TRACKER] 섹터 구독 발송: {center} | 카메라 위치: {transform.position}");
-
-        List<Vector3Int> gridSectors = new List<Vector3Int>();
-
-        for (int x = -1; x <= 1; x++)
-        {
-            for (int y = -1; y <= 1; y++)
-            {
-                for (int z = -1; z <= 1; z++)
-                {
-                    gridSectors.Add(new Vector3Int(center.x + x, center.y + y, center.z + z));
-                }
-            }
-        }
-
-        NetworkManager.Instance.EmitSubscribeGrid(gridSectors);
     }
 }

@@ -4,51 +4,57 @@ using UnityEngine;
 public class PlanetShader : MonoBehaviour
 {
     private const string ShaderName = "Custom/ProceduralPlanet";
-    private Material planetMaterial;
+    private static Shader cachedShader;
+    
+    private Renderer planetRenderer;
+    private MaterialPropertyBlock propBlock;
 
-    /// <summary>
-    /// 전달받은 정적 데이터를 기반으로 절차적 셰이더 매터리얼을 세팅합니다.
-    /// </summary>
-    /// <param name="planetId">행성 고유 ID (난수 시드용)</param>
-    /// <param name="planetType">행성의 타입 ("rocky", "gaseous", "icy")</param>
-    /// <param name="colorHex">행성의 기본 색상 헥스 코드</param>
+    private void Awake()
+    {
+        planetRenderer = GetComponent<Renderer>();
+        propBlock = new MaterialPropertyBlock();
+    }
+
     public void ApplyShader(int planetId, string planetType, string colorHex)
     {
-        Renderer renderer = GetComponent<Renderer>();
-        if (renderer == null)
+        if (planetRenderer == null)
         {
-            Debug.LogError("[PlanetShader] Renderer 컴포넌트를 찾을 수 없습니다.");
+            Debug.LogError("[PlanetShader] Renderer component not found.");
             return;
         }
 
-        Shader shader = Shader.Find(ShaderName);
-        if (shader == null)
+        if (cachedShader == null)
         {
-            Debug.LogError($"[PlanetShader] {ShaderName} 셰이더를 찾을 수 없습니다. 셰이더 파일이 존재하는지 확인하세요.");
-            return;
+            cachedShader = Shader.Find(ShaderName);
+            if (cachedShader == null)
+            {
+                Debug.LogError($"[PlanetShader] Shader not found: {ShaderName}");
+                return;
+            }
         }
 
-        // 기존에 생성된 매터리얼이 있다면 파기하여 메모리 관리
-        if (planetMaterial != null)
+        // 매터리얼 인스턴스가 없다면 공유 매터리얼로 초기화
+        if (planetRenderer.sharedMaterial == null || planetRenderer.sharedMaterial.shader != cachedShader)
         {
-            Destroy(planetMaterial);
+            planetRenderer.sharedMaterial = new Material(cachedShader);
         }
 
-        planetMaterial = new Material(shader);
+        // PropertyBlock을 가져와 파라미터 갱신 후 다시 설정 (메모리 최적화)
+        planetRenderer.GetPropertyBlock(propBlock);
 
-        // 1. 색상 파싱 및 적용
+        // 색상 적용
         Color baseColor = Color.white;
         if (!string.IsNullOrEmpty(colorHex) && ColorUtility.TryParseHtmlString(colorHex, out Color parsedColor))
         {
             baseColor = parsedColor;
         }
-        planetMaterial.SetColor("_BaseColor", baseColor);
+        propBlock.SetColor("_BaseColor", baseColor);
 
-        // 2. 시드값 계산 및 적용 (기존 Three.js 로직과 동일)
+        // 시드 적용
         float seed = planetId * 137.54f;
-        planetMaterial.SetFloat("_Seed", seed);
+        propBlock.SetFloat("_Seed", seed);
 
-        // 3. 행성 타입 매핑 (0: Rocky, 1: Gaseous, 2: Icy)
+        // 타입 적용
         int typeInt = 0;
         if (!string.IsNullOrEmpty(planetType))
         {
@@ -56,18 +62,9 @@ public class PlanetShader : MonoBehaviour
             if (lowerType == "gaseous") typeInt = 1;
             else if (lowerType == "icy") typeInt = 2;
         }
-        planetMaterial.SetInt("_PlanetType", typeInt);
+        propBlock.SetInt("_PlanetType", typeInt);
 
-        // 4. Renderer에 최종 매터리얼 할당
-        renderer.material = planetMaterial;
-    }
-
-    private void OnDestroy()
-    {
-        // 오브젝트 파괴 시 동적 생성된 매터리얼 메모리 해제
-        if (planetMaterial != null)
-        {
-            Destroy(planetMaterial);
-        }
+        // 갱신된 PropertyBlock 적용
+        planetRenderer.SetPropertyBlock(propBlock);
     }
 }

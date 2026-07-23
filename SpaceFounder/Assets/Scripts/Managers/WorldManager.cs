@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using UnityEngine;
@@ -6,16 +7,15 @@ public class WorldManager : MonoBehaviour
 {
     public static WorldManager Instance { get; private set; }
 
+    [Header("Prefabs & Scaling")]
     [SerializeField] private GameObject planetPrefab;
     [SerializeField] private float scaleFactor = 0.01f;
     [SerializeField] private float sectorSize = 1000f;
 
-    public Vector3Int CurrentCameraSector { get; set; } = Vector3Int.zero;
-
-    // 내 행성이 담길 곳
+    public int MyPlanetId { get; private set; } = -1;
+    public Vector3Int CurrentCameraSector { get; private set; } = new Vector3Int(int.MinValue, int.MinValue, int.MinValue);
     public GameObject MyPlanet { get; private set; }
 
-    // [수정] 고유 키("user_9", "default_9")를 사용하는 딕셔너리로 전환
     private Dictionary<string, StaticPlanetData> staticDataMap = new Dictionary<string, StaticPlanetData>();
     private Dictionary<string, GameObject> activePlanets = new Dictionary<string, GameObject>();
     
@@ -33,47 +33,6 @@ public class WorldManager : MonoBehaviour
         }
     }
 
-    public void SetStaticData(StaticPlanetData[] staticPlanets)
-    {
-        // staticDataMap.Clear();
-        if (staticPlanets == null) return;
-
-        foreach (var sp in staticPlanets)
-        {
-            // userType(role)과 planetId를 조합해 고유 키 생성 (예: "user_9", "default_9")
-            string type = string.IsNullOrEmpty(sp.userType) ? "user" : sp.userType;
-            string key = $"{type}_{sp.planetId}";
-            staticDataMap[key] = sp;
-            Debug.Log($"<color=green>[WorldManager] SetStaticData map added -> Key: {key}, Name: {sp.planetName}</color>");
-        }
-    }
-
-    // [수정] 숫자 ID 및 type으로 PlanetController 조회
-    public PlanetController GetPlanetController(int planetId, string userType = "user")
-    {
-        string key = $"{userType}_{planetId}";
-        if (activePlanets.TryGetValue(key, out GameObject planetObj))
-        {
-            return planetObj.GetComponent<PlanetController>();
-        }
-        return null;
-    }
-
-    public GameObject GetPlanet(int planetId, string userType = "user")
-    {
-        string key = $"{userType}_{planetId}";
-        if (activePlanets.TryGetValue(key, out GameObject planetObj))
-        {
-            return planetObj;
-        }
-        return null;
-    }
-
-    public void OnWorldUpdateReceived(DecodedPlanetSnapshot[] planets)
-    {
-        updateQueue.Enqueue(planets);
-    }
-
     private void Update()
     {
         while (updateQueue.TryDequeue(out DecodedPlanetSnapshot[] planets))
@@ -82,26 +41,90 @@ public class WorldManager : MonoBehaviour
         }
     }
 
+    // NetworkManager에서 최초 접속 시 1회 호출
+    public void InitializePlayer(int planetId, Vector3Int initialSector)
+    {
+        MyPlanetId = planetId;
+        UpdateCameraSector(initialSector, true);
+        Debug.Log($"[WorldManager] 플레이어 초기화 완료 - ID: {MyPlanetId}, 초기 섹터: {initialSector}");
+    }
+
+    // CameraChunkTracker에서 섹터 변경을 감지했을 때 호출
+    public void UpdateCameraSector(Vector3Int newSector, bool forceUpdate = false)
+    {
+        if (!forceUpdate && CurrentCameraSector == newSector) return;
+
+        CurrentCameraSector = newSector;
+
+        // 중심 섹터를 기준으로 3x3x3 (27개) 구독망 생성
+        List<Vector3Int> gridSectors = new List<Vector3Int>();
+        for (int x = -1; x <= 1; x++)
+        {
+            for (int y = -1; y <= 1; y++)
+            {
+                for (int z = -1; z <= 1; z++)
+                {
+                    gridSectors.Add(new Vector3Int(newSector.x + x, newSector.y + y, newSector.z + z));
+                }
+            }
+        }
+
+        // NetworkManager를 통해 구독 발송
+        if (NetworkManager.Instance != null)
+        {
+            NetworkManager.Instance.EmitSubscribeGrid(gridSectors);
+        }
+    }
+
+    // CameraController 등 외부 스크립트에서 내 행성 위치를 네트워크로 요청할 때 사용하는 중간다리
+    public void RequestMyPlanetLocation(Action<Vector3Int, Vector3> onLocationReceived)
+    {
+        if (NetworkManager.Instance != null)
+        {
+            NetworkManager.Instance.RequestTrackMyPlanet((success, sector, localPos) =>
+            {
+                if (success)
+                {
+                    onLocationReceived?.Invoke(sector, localPos);
+                }
+            });
+        }
+    }
+
+    public void SetStaticData(StaticPlanetData[] staticPlanets)
+    {
+        if (staticPlanets == null) return;
+
+        foreach (var sp in staticPlanets)
+        {
+            string type = string.IsNullOrEmpty(sp.userType) ? "user" : sp.userType;
+            string key = $"{type}_{sp.planetId}";
+            staticDataMap[key] = sp;
+        }
+    }
+
+    public void OnWorldUpdateReceived(DecodedPlanetSnapshot[] planets)
+    {
+        updateQueue.Enqueue(planets);
+    }
+
     private void ProcessWorldUpdate(DecodedPlanetSnapshot[] planets)
     {
         if (planetPrefab == null) return;
 
-        int myPlanetId = NetworkManager.Instance != null ? NetworkManager.Instance.MyPlanetId : -1;
         HashSet<string> currentFrameKeys = new HashSet<string>();
 
         foreach (var pData in planets)
         {
             int rawId = pData.id;
             
-            // 🔥 핵심: 음수면 default, 양수면 user. 부호 떼고 실제 ID 추출.
+            // 바이너리 프로토콜 약속: 음수면 default, 양수면 user
             bool isDefault = rawId < 0;
             int actualId = Mathf.Abs(rawId);
             
-            // 고유 키를 완벽하고 확실하게 생성
             string uniqueKey = isDefault ? $"default_{actualId}" : $"user_{actualId}";
             currentFrameKeys.Add(uniqueKey);
 
-            // 해당 키의 정적 데이터가 있는지 확인
             staticDataMap.TryGetValue(uniqueKey, out StaticPlanetData staticData);
             bool hasStaticData = !string.IsNullOrEmpty(staticData.planetName);
 
@@ -110,23 +133,21 @@ public class WorldManager : MonoBehaviour
 
             if (activePlanets.TryGetValue(uniqueKey, out GameObject planetObj))
             {
-                // 기존 객체 갱신
                 PlanetController controller = planetObj.GetComponent<PlanetController>();
                 if (controller != null)
                 {
                     controller.UpdateSnapshot(pData.sectorIndex, scaledLocalPos, scaledVelocity, CurrentCameraSector);
                 }
 
-                if (uniqueKey == $"user_{myPlanetId}" && MyPlanet == null)
+                if (!isDefault && actualId == MyPlanetId && MyPlanet == null)
                 {
                     MyPlanet = planetObj;
                 }
             }
             else
             {
-                // 새 객체 생성
-                Vector3 actualPosition = CalculateAbsolutePosition(pData.sectorIndex, scaledLocalPos);
-                GameObject newPlanet = Instantiate(planetPrefab, actualPosition, Quaternion.identity);
+                Vector3 absolutePosition = CalculateAbsolutePosition(pData.sectorIndex, scaledLocalPos);
+                GameObject newPlanet = Instantiate(planetPrefab, absolutePosition, Quaternion.identity);
 
                 PlanetController controller = newPlanet.GetComponent<PlanetController>();
                 if (controller != null)
@@ -147,22 +168,26 @@ public class WorldManager : MonoBehaviour
 
                 activePlanets.Add(uniqueKey, newPlanet);
 
-                if (uniqueKey == $"user_{myPlanetId}")
+                if (!isDefault && actualId == MyPlanetId)
                 {
                     MyPlanet = newPlanet;
                 }
             }
         }
 
-        // 현재 프레임에 없는 행성 제거
+        RemoveStalePlanets(currentFrameKeys);
+    }
+
+    private void RemoveStalePlanets(HashSet<string> currentFrameKeys)
+    {
         List<string> toRemove = new List<string>();
-        string myPlanetKey = $"user_{myPlanetId}";
+        string myPlanetKey = $"user_{MyPlanetId}";
 
         foreach (var key in activePlanets.Keys)
         {
             if (!currentFrameKeys.Contains(key))
             {
-                // 내 행성은 누락 시 삭제 보호
+                // 내 행성은 시야 밖으로 벗어나더라도 씬에서 강제 삭제되는 것을 방지
                 if (key == myPlanetKey) continue;
 
                 Destroy(activePlanets[key]);
@@ -183,5 +208,25 @@ public class WorldManager : MonoBehaviour
             sector.y * sectorSize + localPos.y,
             sector.z * sectorSize + localPos.z
         );
+    }
+
+    public PlanetController GetPlanetController(int planetId, string userType = "user")
+    {
+        string key = $"{userType}_{planetId}";
+        if (activePlanets.TryGetValue(key, out GameObject planetObj))
+        {
+            return planetObj.GetComponent<PlanetController>();
+        }
+        return null;
+    }
+
+    public GameObject GetPlanet(int planetId, string userType = "user")
+    {
+        string key = $"{userType}_{planetId}";
+        if (activePlanets.TryGetValue(key, out GameObject planetObj))
+        {
+            return planetObj;
+        }
+        return null;
     }
 }

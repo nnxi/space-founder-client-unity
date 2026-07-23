@@ -7,7 +7,6 @@ public class UnityMainThreadDispatcher : MonoBehaviour
     private static readonly Queue<Action> executionQueue = new Queue<Action>();
     private static UnityMainThreadDispatcher instance = null;
 
-
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
     private static void Initialize()
     {
@@ -43,11 +42,24 @@ public class UnityMainThreadDispatcher : MonoBehaviour
 
     private void Update()
     {
+        Action[] actionsToRun = null;
+
+        // 메인 스레드 대기 시간을 최소화하기 위해 큐의 데이터만 복사 후 즉시 락 해제
         lock (executionQueue)
         {
-            while (executionQueue.Count > 0)
+            if (executionQueue.Count > 0)
             {
-                executionQueue.Dequeue()?.Invoke();
+                actionsToRun = executionQueue.ToArray();
+                executionQueue.Clear();
+            }
+        }
+
+        // 락이 풀린 상태에서 안전하게 작업 실행
+        if (actionsToRun != null)
+        {
+            for (int i = 0; i < actionsToRun.Length; i++)
+            {
+                actionsToRun[i]?.Invoke();
             }
         }
     }

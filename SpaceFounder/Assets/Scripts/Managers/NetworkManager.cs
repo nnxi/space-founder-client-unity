@@ -4,30 +4,32 @@ using UnityEngine;
 using SocketIOClient;
 using SocketIOClient.Transport;
 
-// 백엔드 SectorIndices 대응
+#region Network Data Structs (DTOs)
 [Serializable]
-public struct SectorData
+public struct Vector3IntData
 {
     public int x { get; set; }
     public int y { get; set; }
     public int z { get; set; }
+    
+    public Vector3Int ToVector3Int() => new Vector3Int(x, y, z);
 }
 
-// 백엔드 Vec3 대응
 [Serializable]
-public struct PositionData
+public struct Vector3Data
 {
     public float x { get; set; }
     public float y { get; set; }
     public float z { get; set; }
+
+    public Vector3 ToVector3() => new Vector3(x, y, z);
 }
 
-// 백엔드 PlayerInitPayload 대응
 [Serializable]
 public struct PlayerInitData
 {
     public int myPlanetId { get; set; }
-    public SectorData currentSector { get; set; }
+    public Vector3IntData currentSector { get; set; }
 }
 
 [Serializable]
@@ -46,9 +48,19 @@ public struct StaticPlanetData
 public struct SectorJoinedData
 {
     public string room { get; set; }
-    public SectorData sector { get; set; }
+    public Vector3IntData sector { get; set; }
     public StaticPlanetData[] staticPlanets { get; set; }
 }
+
+[Serializable]
+public struct CameraTrackMeResponse
+{
+    public bool ok { get; set; }
+    public string error { get; set; }
+    public Vector3IntData chunkIndex { get; set; }
+    public Vector3Data localPosition { get; set; }
+}
+#endregion
 
 public class NetworkManager : MonoBehaviour
 {
@@ -75,7 +87,8 @@ public class NetworkManager : MonoBehaviour
 
     private async void Start()
     {
-        string token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI0OWYwZjVhNi02MGM2LTRkMTctOWI0ZC1iZTE0OGJiNmY2MTYiLCJlbWFpbCI6InNrd29ndXIwM0BnbWFpbC5jb20iLCJpYXQiOjE3ODQ3MzMwNjksImV4cCI6MTc4NDgxOTQ2OX0.c9gDRmJMTK-tNL57FIMdexvVjVwaoqAhbKCGEq2uwDA";
+        // TODO: 실제 환경에서는 인증 토큰을 동적으로 받아오도록 처리
+        string token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI0OWYwZjVhNi02MGM2LTRkMTctOWI0ZC1iZTE0OGJiNmY2MTYiLCJlbWFpbCI6InNrd29ndXIwM0BnbWFpbC5jb20iLCJpYXQiOjE3ODQ4MjExOTIsImV4cCI6MTc4NDkwNzU5Mn0.0w7AxoClbs50U8I6YU8V7nCmqJ1Ew7uV5hJXlys33gM";
 
         var options = new SocketIOOptions
         {
@@ -97,20 +110,10 @@ public class NetworkManager : MonoBehaviour
     // 소켓 수신 이벤트 등록 (Server -> Client)
     private void RegisterSocketEvents()
     {
-        socket.OnConnected += (sender, e) =>
-        {
-            Debug.Log("[NetworkManager] Connected to server");
-        };
-
-        socket.OnDisconnected += (sender, e) =>
-        {
-            Debug.Log("[NetworkManager] Disconnected from server");
-        };
-
-        socket.On("connect_error", response =>
-        {
-            Debug.LogError($"[NetworkManager] Connect Error: {response}");
-        });
+        socket.OnConnected += (sender, e) => Debug.Log("[NetworkManager] Connected to server");
+        socket.OnDisconnected += (sender, e) => Debug.Log("[NetworkManager] Disconnected from server");
+        
+        socket.On("connect_error", response => Debug.LogError($"[NetworkManager] Connect Error: {response}"));
 
         // 1. 초기화 데이터 수신
         socket.On("player:init", response =>
@@ -119,27 +122,16 @@ public class NetworkManager : MonoBehaviour
             {
                 PlayerInitData initData = response.GetValue<PlayerInitData>();
                 MyPlanetId = initData.myPlanetId;
-                Debug.Log($"<color=cyan>[NetworkManager] 1. Received player:init -> MyPlanetId set to: {MyPlanetId}</color>");
-                
-                Vector3Int mySector = new Vector3Int(
-                    initData.currentSector.x, 
-                    initData.currentSector.y, 
-                    initData.currentSector.z
-                );
+                Vector3Int mySector = initData.currentSector.ToVector3Int();
 
-                Debug.Log($"[NetworkManager] player:init - myPlanetId: {initData.myPlanetId}, mySector: {mySector}");
+                Debug.Log($"<color=cyan>[NetworkManager] 1. Received player:init -> MyPlanetId: {MyPlanetId}, MySector: {mySector}</color>");
 
                 UnityMainThreadDispatcher.Instance().Enqueue(() =>
                 {
                     if (WorldManager.Instance != null)
                     {
-                        // 값 전달만 수행. 카메라 제어는 CameraController가 담당.
-                        WorldManager.Instance.CurrentCameraSector = mySector;
-                    }
-                    CameraChunkTracker tracker = FindObjectOfType<CameraChunkTracker>();
-                    if (tracker != null)
-                    {
-                        tracker.InitializeTracker(mySector);
+                        // NetworkManager는 직접 트래커나 카메라를 건드리지 않고, 중앙 통제실인 WorldManager에게 데이터만 넘김
+                        WorldManager.Instance.InitializePlayer(MyPlanetId, mySector);
                     }
                 });
             }
@@ -156,19 +148,17 @@ public class NetworkManager : MonoBehaviour
             {
                 SectorJoinedData joinedData = response.GetValue<SectorJoinedData>();
                 int planetCount = joinedData.staticPlanets != null ? joinedData.staticPlanets.Length : 0;
-                Debug.Log($"<color=yellow>[NetworkManager] 2. Received sector:joined -> Room: {joinedData.room}, StaticPlanets Count: {planetCount}</color>");
                 
-                Debug.Log($"[NetworkManager] sector:joined - room: {joinedData.room}, staticPlanets: {planetCount}ea");
+                Debug.Log($"<color=yellow>[NetworkManager] 2. Received sector:joined -> Room: {joinedData.room}, StaticPlanets: {planetCount}ea</color>");
                 
                 if (joinedData.staticPlanets != null) 
                 {
-                    foreach (var p in joinedData.staticPlanets)
-                    {
-                        Debug.Log($"    -> StaticPlanet: ID={p.planetId}, Name={p.planetName}, UserType={p.userType}");
-                    }
                     UnityMainThreadDispatcher.Instance().Enqueue(() =>
                     {
-                        WorldManager.Instance.SetStaticData(joinedData.staticPlanets);
+                        if (WorldManager.Instance != null)
+                        {
+                            WorldManager.Instance.SetStaticData(joinedData.staticPlanets);
+                        }
                     });
                 }
             }
@@ -184,8 +174,18 @@ public class NetworkManager : MonoBehaviour
             try
             {
                 byte[] rawPayload = response.GetValue<byte[]>();
+                
+                // 디코딩(파싱) 연산은 백그라운드 스레드에서 처리하여 성능 최적화
                 DecodedWorldUpdatePacket packet = WorldPacketDecoder.Decode(rawPayload);
-                WorldManager.Instance.OnWorldUpdateReceived(packet.planets);
+                
+                // 유니티 오브젝트 제어는 메인 스레드로 디스패치
+                UnityMainThreadDispatcher.Instance().Enqueue(() =>
+                {
+                    if (WorldManager.Instance != null)
+                    {
+                        WorldManager.Instance.OnWorldUpdateReceived(packet.planets);
+                    }
+                });
             }
             catch (Exception ex)
             {
@@ -197,12 +197,12 @@ public class NetworkManager : MonoBehaviour
     // 다중 섹터 구독 요청 (Client -> Server)
     public void EmitSubscribeGrid(List<Vector3Int> gridSectors)
     {
-        if (socket == null || !socket.Connected || gridSectors == null) return;
+        if (!IsConnected || gridSectors == null) return;
 
-        List<SectorData> sectorsToSubscribe = new List<SectorData>(gridSectors.Count);
+        List<Vector3IntData> sectorsToSubscribe = new List<Vector3IntData>(gridSectors.Count);
         foreach (var pos in gridSectors)
         {
-            sectorsToSubscribe.Add(new SectorData { x = pos.x, y = pos.y, z = pos.z });
+            sectorsToSubscribe.Add(new Vector3IntData { x = pos.x, y = pos.y, z = pos.z });
         }
 
         socket.EmitAsync("sector:subscribe_grid", sectorsToSubscribe);
@@ -211,7 +211,7 @@ public class NetworkManager : MonoBehaviour
     // 내 행성 추적 요청 (Client -> Server)
     public void RequestTrackMyPlanet(Action<bool, Vector3Int, Vector3> onComplete)
     {
-        if (socket == null || !socket.Connected)
+        if (!IsConnected)
         {
             onComplete?.Invoke(false, default, Vector3.zero);
             return;
@@ -221,22 +221,20 @@ public class NetworkManager : MonoBehaviour
         {
             try
             {
-                var res = response.GetValue<TrackMeResponseData>();
-                if (res.ok)
+                var res = response.GetValue<CameraTrackMeResponse>();
+                
+                UnityMainThreadDispatcher.Instance().Enqueue(() =>
                 {
-                    Vector3Int chunk = new Vector3Int(res.chunkIndex.x, res.chunkIndex.y, res.chunkIndex.z);
-                    Vector3 localPos = new Vector3(res.localPosition.x, res.localPosition.y, res.localPosition.z);
-
-                    UnityMainThreadDispatcher.Instance().Enqueue(() =>
+                    if (res.ok)
                     {
-                        onComplete?.Invoke(true, chunk, localPos);
-                    });
-                }
-                else
-                {
-                    Debug.LogWarning($"[NetworkManager] track_me failed: {res.error}");
-                    UnityMainThreadDispatcher.Instance().Enqueue(() => onComplete?.Invoke(false, default, Vector3.zero));
-                }
+                        onComplete?.Invoke(true, res.chunkIndex.ToVector3Int(), res.localPosition.ToVector3());
+                    }
+                    else
+                    {
+                        Debug.LogWarning($"[NetworkManager] track_me failed: {res.error}");
+                        onComplete?.Invoke(false, default, Vector3.zero);
+                    }
+                });
             }
             catch (Exception ex)
             {
@@ -246,18 +244,9 @@ public class NetworkManager : MonoBehaviour
         });
     }
 
-    [Serializable]
-    private struct TrackMeResponseData
-    {
-        public bool ok { get; set; }
-        public string error { get; set; }
-        public SectorData chunkIndex { get; set; }
-        public PositionData localPosition { get; set; }
-    }
-
     private async void OnApplicationQuit()
     {
-        if (socket != null && socket.Connected)
+        if (IsConnected)
         {
             await socket.DisconnectAsync();
         }

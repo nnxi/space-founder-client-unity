@@ -1,4 +1,5 @@
 using UnityEngine;
+using System;
 
 public enum CameraMode
 {
@@ -11,7 +12,9 @@ public class CameraController : MonoBehaviour
 {
     [Header("Mode Settings")]
     public CameraMode currentMode = CameraMode.Follow;
-    [SerializeField] private float orbitSpeed = 15f; // Orbit 모드 시 자동 회전 속도
+    public bool HasFocusedOnMyPlanet => hasFocusedOnMyPlanet;
+
+    [SerializeField] private float orbitSpeed = 15f;
 
     [Header("Speed Settings")]
     [SerializeField] private float normalSpeed = 50f;
@@ -40,6 +43,7 @@ public class CameraController : MonoBehaviour
     private float currentRotationY;
 
     private bool hasFocusedOnMyPlanet = false;
+    private bool isRequestingLocation = false; // 중복 요청 방지 플래그
 
     private void Start()
     {
@@ -49,72 +53,96 @@ public class CameraController : MonoBehaviour
 
     private void Update()
     {
-        if (!hasFocusedOnMyPlanet)
-        {
-            TryFocusOnMyPlanet();
-            return;
-        }
-
         HandleModeSwitch();
 
         if (currentMode == CameraMode.Free)
         {
             HandleFreeRotation();
             HandleFreeMovement();
+            // Free 모드일 때는 포커스를 해제하여 언제든 다시 Follow로 복귀할 수 있도록 설정
+            hasFocusedOnMyPlanet = false; 
         }
         else
         {
-            HandleOrbitalMovement();
+            if (!hasFocusedOnMyPlanet)
+            {
+                TryFocusOnMyPlanet();
+            }
+            else
+            {
+                HandleOrbitalMovement();
+            }
         }
     }
 
     private void TryFocusOnMyPlanet()
     {
-        if (WorldManager.Instance == null || WorldManager.Instance.MyPlanet == null) return;
+        if (WorldManager.Instance == null) return;
 
         GameObject myPlanet = WorldManager.Instance.MyPlanet;
-        
+
+        // 행성이 씬에 존재하지 않는 경우 백엔드에 위치를 요청
+        if (myPlanet == null)
+        {
+            if (!isRequestingLocation)
+            {
+                isRequestingLocation = true;
+                // WorldManager.cs에 RequestMyPlanetLocation(Action<Vector3Int, Vector3> callback) 함수 구현 필요
+                WorldManager.Instance.RequestMyPlanetLocation(OnPlanetLocationReceived);
+            }
+            return; 
+        }
+
+        // 행성이 존재하면 정상적으로 포커스 진행
         Vector3 planetPos = myPlanet.transform.position;
         Vector3Int currentSector = WorldManager.Instance.CurrentCameraSector;
 
-        // 유니티 스케일이 적용된 섹터 크기 (100000 * 0.01 = 1000f)
         float scaledSectorSize = 1000f;
-
-        // 섹터의 중심 좌표 계산
         Vector3 sectorCenter = new Vector3(
             currentSector.x * scaledSectorSize,
             currentSector.y * scaledSectorSize,
             currentSector.z * scaledSectorSize
         );
 
-        // 행성 위치에서 섹터 중심을 향하는 방향 벡터 계산
         Vector3 directionToCenter = (sectorCenter - planetPos).normalized;
 
-        // 행성이 정확히 섹터 중심에 위치해 방향 벡터가 0이 될 경우의 방어 로직
         if (directionToCenter.sqrMagnitude == 0f)
         {
             directionToCenter = Vector3.one.normalized;
         }
 
-        // 카메라가 행성을 바라봐야 하므로 시선 방향은 반대(-directionToCenter)
         Quaternion lookRotation = Quaternion.LookRotation(-directionToCenter);
-
         targetPlanet = myPlanet.transform;
         
-        // 수동으로 좌표를 지정하는 대신, 계산된 방향을 오르빗 카메라의 회전값으로 변환
         targetRotationX = lookRotation.eulerAngles.y;
         targetRotationY = lookRotation.eulerAngles.x;
 
-        // Unity의 Euler 각도 보정 (180도를 넘어가면 음수로 변환하여 제한 범위와 맞춤)
         if (targetRotationY > 180f) targetRotationY -= 360f;
 
         currentRotationX = targetRotationX;
         currentRotationY = targetRotationY;
         currentDistance = initialDistance;
 
-        // UpdateOrbitalPosition이 위에서 설정한 각도와 거리를 바탕으로 카메라를 정확한 위치에 세팅함
         UpdateOrbitalPosition(true);
         hasFocusedOnMyPlanet = true;
+        isRequestingLocation = false;
+    }
+
+    // 위치 정보를 응답받고 카메라를 워프시키는 콜백
+    private void OnPlanetLocationReceived(Vector3Int sector, Vector3 localPos)
+    {
+        float scaledSectorSize = 1000f;
+        Vector3 sectorCenter = new Vector3(
+            sector.x * scaledSectorSize,
+            sector.y * scaledSectorSize,
+            sector.z * scaledSectorSize
+        );
+
+        Vector3 estimatedPlanetPos = sectorCenter + localPos;
+        transform.position = estimatedPlanetPos - (transform.forward * initialDistance);
+
+        // 워프 직후 CameraChunkTracker가 변경된 위치를 기반으로 섹터를 감지하여 구독을 자동 갱신합니다.
+        isRequestingLocation = false;
     }
 
     private void HandleModeSwitch()
@@ -126,11 +154,12 @@ public class CameraController : MonoBehaviour
 
     private void SwitchMode(CameraMode newMode)
     {
+        if (currentMode == newMode) return;
+
         currentMode = newMode;
         
         if (newMode == CameraMode.Free)
         {
-            // Free 모드 진입 시 현재 회전값을 동기화하여 시점 튀는 현상 방지
             SyncRotationVariables();
             targetVelocity = Vector3.zero;
             currentVelocity = Vector3.zero;
@@ -141,7 +170,6 @@ public class CameraController : MonoBehaviour
     {
         if (targetPlanet == null) return;
 
-        // 마우스 스크롤 줌 인/아웃
         float scroll = Input.GetAxis("Mouse ScrollWheel");
         if (Mathf.Abs(scroll) > 0.01f)
         {
@@ -149,7 +177,6 @@ public class CameraController : MonoBehaviour
             currentDistance = Mathf.Clamp(currentDistance, minDistance, maxDistance);
         }
 
-        // 우클릭 드래그로 각도 조절
         if (Input.GetMouseButton(1))
         {
             Cursor.lockState = CursorLockMode.Confined;
@@ -161,7 +188,6 @@ public class CameraController : MonoBehaviour
         {
             Cursor.lockState = CursorLockMode.None;
             
-            // Orbit 모드일 때 입력이 없으면 자동 공전
             if (currentMode == CameraMode.Orbit)
             {
                 targetRotationX += orbitSpeed * Time.deltaTime;
