@@ -6,19 +6,26 @@ public class CameraChunkTracker : MonoBehaviour
     [SerializeField] private CameraController mainCameraController;
     private Vector3Int currentCenterSector = new Vector3Int(int.MinValue, int.MinValue, int.MinValue);
 
-    private bool isFirst = false;
-
 
     private void Update()
     {
+        Debug.Log("1");
         if (WorldManager.Instance == null) return;
 
+        Debug.Log("2");
         if (mainCameraController == null || !mainCameraController.HasFocusedOnMyPlanet) return;
         
+        Debug.Log("3");
         // 내 행성 ID가 할당되기 전(서버 연결 및 초기화 전)에는 감지 중지
         if (WorldManager.Instance.MyPlanetId == -1) return;
 
-        Vector3Int newCenterSector = CalculateSector(transform.position);
+        Debug.Log("4");
+
+        Vector3Int newCenterSector = CalculateSector(mainCameraController.transform.position);
+
+        Debug.Log($"newCenterSector: {newCenterSector}");
+        Debug.Log($"current transform.position: {mainCameraController.transform.position}");
+        Debug.Log($"currentCenterSector: {currentCenterSector}");
 
         // 방어 로직: 카메라는 아직 (0,0,0)에 있는데 내 실제 섹터가 (0,0,0)이 아닐 경우
         // 이는 행성이 생성되기 전이나 카메라 워프가 완료되지 않은 찰나의 상태이므로 무시
@@ -42,6 +49,7 @@ public class CameraChunkTracker : MonoBehaviour
         {
             currentCenterSector = newCenterSector;
             WorldManager.Instance.UpdateCameraSector(currentCenterSector, false);
+            Debug.Log($"[CameraChunkTracker] -> worldManager.UpdateCameraSector {currentCenterSector}");
         }
     }
 

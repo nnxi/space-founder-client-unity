@@ -60,7 +60,7 @@ public class CameraController : MonoBehaviour
             HandleFreeRotation();
             HandleFreeMovement();
             // Free 모드일 때는 포커스를 해제하여 언제든 다시 Follow로 복귀할 수 있도록 설정
-            hasFocusedOnMyPlanet = false; 
+            //hasFocusedOnMyPlanet = false; 
         }
         else
         {

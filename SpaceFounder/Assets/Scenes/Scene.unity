@@ -5131,6 +5131,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CameraChunkTracker
   chunkSize: 1000
+  mainCameraController: {fileID: 330585548}
 --- !u!1 &390598940
 GameObject:
   m_ObjectHideFlags: 0

@@ -69,6 +69,8 @@ public class WorldManager : MonoBehaviour
             }
         }
 
+        Debug.Log($"newSector received: {newSector}");
+
         // NetworkManager를 통해 구독 발송
         if (NetworkManager.Instance != null)
         {
