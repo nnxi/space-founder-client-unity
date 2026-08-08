@@ -88,7 +88,7 @@ public class NetworkManager : MonoBehaviour
     private async void Start()
     {
         // TODO: 실제 환경에서는 인증 토큰을 동적으로 받아오도록 처리
-        string token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI0OWYwZjVhNi02MGM2LTRkMTctOWI0ZC1iZTE0OGJiNmY2MTYiLCJlbWFpbCI6InNrd29ndXIwM0BnbWFpbC5jb20iLCJpYXQiOjE3ODUxMTE5NDcsImV4cCI6MTc4NTE5ODM0N30.WsXrT40oiZZy9PjPI3RX6zvtagkaUAZ83SigGmfqvUU";
+        string token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI0OWYwZjVhNi02MGM2LTRkMTctOWI0ZC1iZTE0OGJiNmY2MTYiLCJlbWFpbCI6InNrd29ndXIwM0BnbWFpbC5jb20iLCJpYXQiOjE3ODU4NDIwMzUsImV4cCI6MTc4NTkyODQzNX0.LfONEJ8GL2VsOiHOVWrJCbQTVaLwTS2P3IpNTbIKWEE";
 
         var options = new SocketIOOptions
         {

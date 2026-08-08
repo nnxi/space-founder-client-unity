@@ -3,9 +3,14 @@ using System.Collections.Generic;
 
 public class PlanetController : MonoBehaviour
 {
-    [Header("Smoothing Settings")]
-    [SerializeField] private float smoothSpeed = 10f;
-    [SerializeField] private float snapDistance = 100f; 
+    [Header("Planet Info")]
+    [SerializeField] private string planetName;
+    [SerializeField] private string ownerName;
+    [SerializeField] private bool isDefaultPlanet;
+
+    [Header("Network Settings")]
+    [SerializeField] private float snapDistance = 300f; 
+    [SerializeField] private float packetInterval = 10f; // 서버 패킷 수신 주기 (초 단위)
 
     [Header("Visual Effects")]
     [SerializeField] private TrailRenderer trailRenderer;
@@ -24,15 +29,12 @@ public class PlanetController : MonoBehaviour
 
     private Vector3 networkPosition;
     private Vector3 networkVelocity;
-    private Vector3 visualOffset;
     private bool isInitialized = false;
 
     private const float SECTOR_SIZE = 1000f; 
 
-    // WorldManager로부터 수신한 좌표를 바탕으로 행성의 렌더링 목표 위치 설정
     public void UpdateSnapshot(Vector3Int planetSector, Vector3 planetLocalPos, Vector3 serverVel, Vector3Int cameraSector)
     {
-        // 카메라가 위치한 섹터를 기준으로 상대 좌표 계산 (부동소수점 오차 방지)
         Vector3Int relativeSector = planetSector - cameraSector;
         Vector3 targetPosition = new Vector3(
             (relativeSector.x * SECTOR_SIZE) + planetLocalPos.x,
@@ -45,16 +47,14 @@ public class PlanetController : MonoBehaviour
             return;
         }
 
-        // 초기화 전이거나 오차가 임계값을 넘으면 보간 없이 즉시 이동
+        // 초기화 전이거나 오차가 임계값을 넘으면 즉시 이동
         if (!isInitialized || Vector3.Distance(transform.position, targetPosition) > snapDistance)
         {
             transform.position = targetPosition;
             networkPosition = targetPosition;
             networkVelocity = serverVel;
-            visualOffset = Vector3.zero;
             isInitialized = true;
 
-            // 텔레포트 시 트레일이 비정상적으로 길게 그려지는 현상 방지
             if (trailRenderer != null)
             {
                 trailRenderer.Clear();
@@ -62,11 +62,14 @@ public class PlanetController : MonoBehaviour
             return;
         }
 
-        // 부드러운 이동을 위한 시각적 오프셋 계산
-        Vector3 currentVisualPos = transform.position;
+        // 예측 위치와 서버 실제 위치 간의 오차 계산
+        Vector3 error = targetPosition - networkPosition;
+
+        // 다음 패킷이 올 때까지 오차를 나누어 흡수하도록 속도 보정
+        networkVelocity = serverVel + (error / packetInterval);
+        
+        // 기준 위치는 서버 위치로 갱신
         networkPosition = targetPosition;
-        networkVelocity = serverVel;
-        visualOffset = currentVisualPos - networkPosition;
     }
 
     private void Update()
@@ -75,15 +78,18 @@ public class PlanetController : MonoBehaviour
 
         float dt = Time.deltaTime;
 
-        // 서버 속도를 기반으로 한 클라이언트 측 위치 예측(Dead Reckoning) 및 보간
+        // 보정된 속도로 예측 이동 수행
         networkPosition += networkVelocity * dt;
-        visualOffset = Vector3.Lerp(visualOffset, Vector3.zero, dt * smoothSpeed);
-        transform.position = networkPosition + visualOffset;
+        transform.position = networkPosition;
 
         UpdateSatellites(Time.time);
     }
 
-    // 위성의 공전 궤도 업데이트
+    public void ApplyWorldShift(Vector3 amount)
+    {
+        networkPosition -= amount;
+    }
+
     private void UpdateSatellites(float timeSec)
     {
         if (satellites.Count == 0) return;
@@ -110,5 +116,22 @@ public class PlanetController : MonoBehaviour
             speed = speed,
             inclination = inclination
         });
+    }
+
+    private void OnMouseEnter()
+    {
+        PlanetInfoUIManager.Instance?.ShowPlanetInfo(planetName, ownerName, isDefaultPlanet);
+    }
+
+    private void OnMouseExit()
+    {
+        PlanetInfoUIManager.Instance?.HidePlanetInfo();
+    }
+
+    public void SetPlanetData(string name, string owner, bool isDefault)
+    {
+        this.planetName = name;
+        this.ownerName = owner;
+        this.isDefaultPlanet = isDefault;
     }
 }

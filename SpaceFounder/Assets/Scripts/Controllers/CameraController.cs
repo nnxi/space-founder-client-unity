@@ -95,14 +95,9 @@ public class CameraController : MonoBehaviour
 
         // 행성이 존재하면 정상적으로 포커스 진행
         Vector3 planetPos = myPlanet.transform.position;
-        Vector3Int currentSector = WorldManager.Instance.CurrentCameraSector;
 
-        float scaledSectorSize = 1000f;
-        Vector3 sectorCenter = new Vector3(
-            currentSector.x * scaledSectorSize,
-            currentSector.y * scaledSectorSize,
-            currentSector.z * scaledSectorSize
-        );
+        // 수정: 상대 좌표계에서 현재 카메라 섹터의 중심점은 항상 유니티 원점(0,0,0)입니다.
+        Vector3 sectorCenter = Vector3.zero;
 
         Vector3 directionToCenter = (sectorCenter - planetPos).normalized;
 
@@ -128,20 +123,21 @@ public class CameraController : MonoBehaviour
         isRequestingLocation = false;
     }
 
-    // 위치 정보를 응답받고 카메라를 워프시키는 콜백
     private void OnPlanetLocationReceived(Vector3Int sector, Vector3 localPos)
     {
+        // 수정: 서버가 준 절대 섹터 위치를 현재 카메라 섹터 기준 '상대 오프셋'으로 변환
+        Vector3Int relativeSector = sector - WorldManager.Instance.CurrentCameraSector;
+        
         float scaledSectorSize = 1000f;
-        Vector3 sectorCenter = new Vector3(
-            sector.x * scaledSectorSize,
-            sector.y * scaledSectorSize,
-            sector.z * scaledSectorSize
+        Vector3 relativeSectorCenter = new Vector3(
+            relativeSector.x * scaledSectorSize,
+            relativeSector.y * scaledSectorSize,
+            relativeSector.z * scaledSectorSize
         );
 
-        Vector3 estimatedPlanetPos = sectorCenter + localPos;
+        Vector3 estimatedPlanetPos = relativeSectorCenter + localPos;
         transform.position = estimatedPlanetPos - (transform.forward * initialDistance);
 
-        // 워프 직후 CameraChunkTracker가 변경된 위치를 기반으로 섹터를 감지하여 구독을 자동 갱신합니다.
         isRequestingLocation = false;
     }
 

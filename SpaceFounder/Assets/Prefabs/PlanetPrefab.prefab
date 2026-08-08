@@ -111,7 +111,7 @@ SphereCollider:
   m_LayerOverridePriority: 0
   m_IsTrigger: 0
   m_ProvidesContacts: 0
-  m_Enabled: 0
+  m_Enabled: 1
   serializedVersion: 3
   m_Radius: 0.5
   m_Center: {x: 0, y: 0, z: 0}
@@ -127,7 +127,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5b660bb366e0a3241a3ae5f7d3bee5a0, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlanetController
+  planetName: 
+  ownerName: 
+  isDefaultPlanet: 0
   smoothSpeed: 10
+  snapDistance: 100
+  trailRenderer: {fileID: 0}
   satellites: []
 --- !u!96 &5354976242308637810
 TrailRenderer:

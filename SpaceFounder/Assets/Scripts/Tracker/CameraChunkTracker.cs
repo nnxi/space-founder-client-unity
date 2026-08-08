@@ -4,61 +4,59 @@ public class CameraChunkTracker : MonoBehaviour
 {
     [SerializeField] private float chunkSize = 1000f;
     [SerializeField] private CameraController mainCameraController;
-    private Vector3Int currentCenterSector = new Vector3Int(int.MinValue, int.MinValue, int.MinValue);
-
+    
+    // 이전에 구독했던 논리적 기준점(서버의 0,0,0)을 저장할 변수 (초기화 필요)
+    private bool isInitialized = false;
 
     private void Update()
     {
-        Debug.Log("1");
-        if (WorldManager.Instance == null) return;
-
-        Debug.Log("2");
+        if (WorldManager.Instance == null || WorldManager.Instance.MyPlanetId == -1) return;
         if (mainCameraController == null || !mainCameraController.HasFocusedOnMyPlanet) return;
-        
-        Debug.Log("3");
-        // 내 행성 ID가 할당되기 전(서버 연결 및 초기화 전)에는 감지 중지
-        if (WorldManager.Instance.MyPlanetId == -1) return;
 
-        Debug.Log("4");
-
-        Vector3Int newCenterSector = CalculateSector(mainCameraController.transform.position);
-
-        Debug.Log($"newCenterSector: {newCenterSector}");
-        Debug.Log($"current transform.position: {mainCameraController.transform.position}");
-        Debug.Log($"currentCenterSector: {currentCenterSector}");
-
-        // 방어 로직: 카메라는 아직 (0,0,0)에 있는데 내 실제 섹터가 (0,0,0)이 아닐 경우
-        // 이는 행성이 생성되기 전이나 카메라 워프가 완료되지 않은 찰나의 상태이므로 무시
-        if (WorldManager.Instance.MyPlanet == null && 
-            newCenterSector == Vector3Int.zero && 
-            WorldManager.Instance.CurrentCameraSector != Vector3Int.zero)
+        // 초기화 1회: 현재 월드매니저의 섹터를 기준으로 시작
+        if (!isInitialized)
         {
-            return; 
-        }
-
-        // 최초 1회 동기화
-        // WorldManager가 통신을 통해 먼저 세팅해둔 내 섹터 값을 그대로 수용하여 중복 구독 방지
-        if (currentCenterSector.x == int.MinValue)
-        {
-            currentCenterSector = WorldManager.Instance.CurrentCameraSector;
+            if (WorldManager.Instance.CurrentCameraSector.x != int.MinValue)
+            {
+                isInitialized = true;
+            }
             return;
         }
 
-        // 카메라 이동으로 실제 섹터가 바뀌었을 때만 WorldManager에 알림
-        if (newCenterSector != currentCenterSector)
+        Vector3 camPos = mainCameraController.transform.position;
+        Vector3Int offsetSector = new Vector3Int(
+            Mathf.FloorToInt(camPos.x / chunkSize),
+            Mathf.FloorToInt(camPos.y / chunkSize),
+            Mathf.FloorToInt(camPos.z / chunkSize)
+        );
+
+        // 카메라는 항상 0번 섹터(-1000 ~ 1000) 안에서만 놀아야 함
+        // 오프셋이 발생했다는 것은 섹터 경계를 넘었다는 의미
+        if (offsetSector != Vector3Int.zero)
         {
-            currentCenterSector = newCenterSector;
-            WorldManager.Instance.UpdateCameraSector(currentCenterSector, false);
-            Debug.Log($"[CameraChunkTracker] -> worldManager.UpdateCameraSector {currentCenterSector}");
+            PerformWorldShift(offsetSector);
         }
     }
 
-    private Vector3Int CalculateSector(Vector3 pos)
+    private void PerformWorldShift(Vector3Int offsetSector)
     {
-        return new Vector3Int(
-            Mathf.FloorToInt(pos.x / chunkSize),
-            Mathf.FloorToInt(pos.y / chunkSize),
-            Mathf.FloorToInt(pos.z / chunkSize)
+        // 1. 서버에 요청할 CurrentCameraSector를 새로운 절대 좌표로 갱신 (예: 5,4,3 -> 5,5,3)
+        Vector3Int newServerSector = WorldManager.Instance.CurrentCameraSector + offsetSector;
+        WorldManager.Instance.UpdateCameraSector(newServerSector, false);
+        
+        Debug.Log($"[World Shift] 섹터 갱신: {newServerSector}, 발생한 오프셋: {offsetSector}");
+
+        // 2. 물리적 이동량 계산
+        Vector3 shiftAmount = new Vector3(
+            offsetSector.x * chunkSize,
+            offsetSector.y * chunkSize,
+            offsetSector.z * chunkSize
         );
+        
+        // 3. 카메라를 원점(0,0,0) 부근으로 강제로 되돌림
+        mainCameraController.transform.position -= shiftAmount;
+
+        // 4. 행성들도 똑같이 되돌려서 화면상에 전혀 흔들림이 없도록 처리
+        WorldManager.Instance.ShiftAllPlanets(shiftAmount);
     }
 }

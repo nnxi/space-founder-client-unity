@@ -16,6 +16,8 @@ public class WorldManager : MonoBehaviour
     public Vector3Int CurrentCameraSector { get; private set; } = new Vector3Int(int.MinValue, int.MinValue, int.MinValue);
     public GameObject MyPlanet { get; private set; }
 
+    public Vector3Int BaseSector { get; private set; }
+
     private Dictionary<string, StaticPlanetData> staticDataMap = new Dictionary<string, StaticPlanetData>();
     private Dictionary<string, GameObject> activePlanets = new Dictionary<string, GameObject>();
     
@@ -45,6 +47,7 @@ public class WorldManager : MonoBehaviour
     public void InitializePlayer(int planetId, Vector3Int initialSector)
     {
         MyPlanetId = planetId;
+        BaseSector = initialSector;
         UpdateCameraSector(initialSector, true);
         Debug.Log($"[WorldManager] 플레이어 초기화 완료 - ID: {MyPlanetId}, 초기 섹터: {initialSector}");
     }
@@ -168,6 +171,8 @@ public class WorldManager : MonoBehaviour
                     newPlanet.name = uniqueKey;
                 }
 
+                controller.SetPlanetData(staticData.planetName, staticData.username, isDefault);
+
                 activePlanets.Add(uniqueKey, newPlanet);
 
                 if (!isDefault && actualId == MyPlanetId)
@@ -230,5 +235,24 @@ public class WorldManager : MonoBehaviour
             return planetObj;
         }
         return null;
+    }
+
+    public void ShiftAllPlanets(Vector3 shiftAmount)
+    {
+        foreach (var planetObj in activePlanets.Values)
+        {
+            if (planetObj == null) continue;
+
+            // 유니티 실제 위치(transform) 이동
+            planetObj.transform.position -= shiftAmount;
+
+            // PlanetController 내부의 networkPosition도 시프트해주어야 
+            // Update()의 보간(Dead Reckoning) 과정에서 다시 예전 위치로 돌아가지 않습니다.
+            PlanetController controller = planetObj.GetComponent<PlanetController>();
+            if (controller != null)
+            {
+                controller.ApplyWorldShift(shiftAmount);
+            }
+        }
     }
 }
