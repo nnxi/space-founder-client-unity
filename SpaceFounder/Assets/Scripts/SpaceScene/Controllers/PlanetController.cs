@@ -14,6 +14,7 @@ public class PlanetController : MonoBehaviour
 
     [Header("Visual Effects")]
     [SerializeField] private TrailRenderer trailRenderer;
+    [SerializeField] private float rotationSpeed = 15f; // 행성 자전 속도
 
     [System.Serializable]
     public class SatelliteData
@@ -81,6 +82,9 @@ public class PlanetController : MonoBehaviour
         // 보정된 속도로 예측 이동 수행
         networkPosition += networkVelocity * dt;
         transform.position = networkPosition;
+
+        // Y축 기준으로 자전 수행 (가로 무늬와 수평 유지)
+        transform.Rotate(Vector3.up * rotationSpeed * dt);
 
         UpdateSatellites(Time.time);
     }

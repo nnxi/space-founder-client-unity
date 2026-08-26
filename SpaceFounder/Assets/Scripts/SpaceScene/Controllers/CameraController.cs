@@ -173,7 +173,8 @@ public class CameraController : MonoBehaviour
             currentDistance = Mathf.Clamp(currentDistance, minDistance, maxDistance);
         }
 
-        if (Input.GetMouseButton(1))
+        // 수정: 좌클릭(0) 또는 우클릭(1) 드래그 시 모두 회전 가능하도록 변경
+        if (Input.GetMouseButton(0) || Input.GetMouseButton(1))
         {
             Cursor.lockState = CursorLockMode.Confined;
             targetRotationX += Input.GetAxis("Mouse X") * mouseSensitivity;
@@ -184,6 +185,7 @@ public class CameraController : MonoBehaviour
         {
             Cursor.lockState = CursorLockMode.None;
             
+            // Orbit 모드일 때는 마우스를 놓았을 때 자동으로 공전 회전
             if (currentMode == CameraMode.Orbit)
             {
                 targetRotationX += orbitSpeed * Time.deltaTime;
@@ -215,7 +217,8 @@ public class CameraController : MonoBehaviour
 
     private void HandleFreeRotation()
     {
-        if (Input.GetMouseButton(1))
+        // Free 모드에서도 조작감을 통일하기 위해 좌/우클릭 모두 지원하도록 변경
+        if (Input.GetMouseButton(0) || Input.GetMouseButton(1))
         {
             Cursor.lockState = CursorLockMode.Confined;
             targetRotationX += Input.GetAxis("Mouse X") * mouseSensitivity;

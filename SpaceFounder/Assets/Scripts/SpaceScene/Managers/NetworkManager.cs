@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using SocketIOClient;
 using SocketIOClient.Transport;
+using UnityEngine.SceneManagement;
 
 #region Network Data Structs (DTOs)
 [Serializable]
@@ -87,8 +88,22 @@ public class NetworkManager : MonoBehaviour
 
     private async void Start()
     {
-        // TODO: 실제 환경에서는 인증 토큰을 동적으로 받아오도록 처리 / 현재는 테스트용 토큰 적용
-        string token = "DEV_TEST_DUMMY_TOKEN_1234";
+        string token = UserManager.Instance.AuthToken;
+
+        // 토큰이 없거나 유효하지 않은 경우
+        if (string.IsNullOrEmpty(token))
+        {
+            Debug.LogError("[NetworkManager] 유효한 인증 토큰이 없습니다. 로그인 씬으로 돌아갑니다.");
+            
+            // 유저 데이터 및 로컬 스토리지 초기화
+            UserManager.Instance.ClearUserData();
+            PlayerPrefs.DeleteKey("AuthToken");
+            PlayerPrefs.Save();
+
+            // 로그인 씬으로 강제 이동
+            SceneManager.LoadScene("LoginScene");
+            return;
+        }
 
         var options = new SocketIOOptions
         {
