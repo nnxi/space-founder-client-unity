@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.UI; // UI 컴포넌트 제어를 위해 추가
 using System;
 
 public enum CameraMode
@@ -31,6 +32,17 @@ public class CameraController : MonoBehaviour
     [SerializeField] private float minDistance = 2f;
     [SerializeField] private float maxDistance = 70f;
 
+    [Header("UI Settings")]
+    [SerializeField] private Button followButton;
+    [SerializeField] private Button orbitButton;
+    [SerializeField] private Button freeButton;
+    [SerializeField] private Image followIcon;
+    [SerializeField] private Image orbitIcon;
+    [SerializeField] private Image freeIcon;
+    
+    [SerializeField] private float activeIconAlpha = 1f;
+    [SerializeField] private float inactiveIconAlpha = 0.4f;
+
     private Transform targetPlanet;
     private float currentDistance;
 
@@ -49,6 +61,14 @@ public class CameraController : MonoBehaviour
     {
         currentDistance = initialDistance;
         SyncRotationVariables();
+
+        // UI 버튼 클릭 이벤트 연결
+        if (followButton != null) followButton.onClick.AddListener(() => SwitchMode(CameraMode.Follow));
+        if (orbitButton != null) orbitButton.onClick.AddListener(() => SwitchMode(CameraMode.Orbit));
+        if (freeButton != null) freeButton.onClick.AddListener(() => SwitchMode(CameraMode.Free));
+
+        // 초기 UI 상태 적용
+        UpdateUI();
     }
 
     private void Update()
@@ -59,8 +79,6 @@ public class CameraController : MonoBehaviour
         {
             HandleFreeRotation();
             HandleFreeMovement();
-            // Free 모드일 때는 포커스를 해제하여 언제든 다시 Follow로 복귀할 수 있도록 설정
-            //hasFocusedOnMyPlanet = false; 
         }
         else
         {
@@ -81,13 +99,12 @@ public class CameraController : MonoBehaviour
 
         GameObject myPlanet = WorldManager.Instance.MyPlanet;
 
-        // 행성이 씬에 존재하지 않는 경우 백엔드에 위치를 요청
+        // 행성이 씬에 존재하지 않는 경우 백엔드에 위치 요청
         if (myPlanet == null)
         {
             if (!isRequestingLocation)
             {
                 isRequestingLocation = true;
-                // WorldManager.cs에 RequestMyPlanetLocation(Action<Vector3Int, Vector3> callback) 함수 구현 필요
                 WorldManager.Instance.RequestMyPlanetLocation(OnPlanetLocationReceived);
             }
             return; 
@@ -95,8 +112,6 @@ public class CameraController : MonoBehaviour
 
         // 행성이 존재하면 정상적으로 포커스 진행
         Vector3 planetPos = myPlanet.transform.position;
-
-        // 수정: 상대 좌표계에서 현재 카메라 섹터의 중심점은 항상 유니티 원점(0,0,0)입니다.
         Vector3 sectorCenter = Vector3.zero;
 
         Vector3 directionToCenter = (sectorCenter - planetPos).normalized;
@@ -125,7 +140,7 @@ public class CameraController : MonoBehaviour
 
     private void OnPlanetLocationReceived(Vector3Int sector, Vector3 localPos)
     {
-        // 수정: 서버가 준 절대 섹터 위치를 현재 카메라 섹터 기준 '상대 오프셋'으로 변환
+        // 절대 섹터 위치를 현재 카메라 섹터 기준 상대 오프셋으로 변환
         Vector3Int relativeSector = sector - WorldManager.Instance.CurrentCameraSector;
         
         float scaledSectorSize = 1000f;
@@ -160,6 +175,41 @@ public class CameraController : MonoBehaviour
             targetVelocity = Vector3.zero;
             currentVelocity = Vector3.zero;
         }
+
+        // 모드가 변경될 때 UI 업데이트
+        UpdateUI();
+    }
+
+    private void UpdateUI()
+    {
+        UpdateModeUI(CameraMode.Follow, followButton, followIcon);
+        UpdateModeUI(CameraMode.Orbit, orbitButton, orbitIcon);
+        UpdateModeUI(CameraMode.Free, freeButton, freeIcon);
+    }
+
+    private void UpdateModeUI(CameraMode mode, Button btn, Image icon)
+    {
+        bool isActive = (currentMode == mode);
+        
+        // 아이콘 알파값 갱신
+        if (icon != null)
+        {
+            Color c = icon.color;
+            c.a = isActive ? activeIconAlpha : inactiveIconAlpha;
+            icon.color = c;
+        }
+        
+        // 버튼 배경(글로우 이미지) 알파값 갱신
+        if (btn != null)
+        {
+            Image glowImage = btn.GetComponent<Image>();
+            if (glowImage != null)
+            {
+                Color c = glowImage.color;
+                c.a = isActive ? 0.1f : 0f; // 선택 시 글로우 100%, 비선택 시 완전 투명(클릭은 가능)
+                glowImage.color = c;
+            }
+        }
     }
 
     private void HandleOrbitalMovement()
@@ -173,7 +223,7 @@ public class CameraController : MonoBehaviour
             currentDistance = Mathf.Clamp(currentDistance, minDistance, maxDistance);
         }
 
-        // 수정: 좌클릭(0) 또는 우클릭(1) 드래그 시 모두 회전 가능하도록 변경
+        // 좌클릭 또는 우클릭 드래그 시 회전
         if (Input.GetMouseButton(0) || Input.GetMouseButton(1))
         {
             Cursor.lockState = CursorLockMode.Confined;
@@ -185,7 +235,7 @@ public class CameraController : MonoBehaviour
         {
             Cursor.lockState = CursorLockMode.None;
             
-            // Orbit 모드일 때는 마우스를 놓았을 때 자동으로 공전 회전
+            // Orbit 모드일 때 마우스를 놓으면 자동 공전
             if (currentMode == CameraMode.Orbit)
             {
                 targetRotationX += orbitSpeed * Time.deltaTime;
@@ -217,7 +267,7 @@ public class CameraController : MonoBehaviour
 
     private void HandleFreeRotation()
     {
-        // Free 모드에서도 조작감을 통일하기 위해 좌/우클릭 모두 지원하도록 변경
+        // Free 모드 마우스 조작
         if (Input.GetMouseButton(0) || Input.GetMouseButton(1))
         {
             Cursor.lockState = CursorLockMode.Confined;

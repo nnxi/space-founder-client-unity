@@ -10,11 +10,11 @@ public class PlanetController : MonoBehaviour
 
     [Header("Network Settings")]
     [SerializeField] private float snapDistance = 300f; 
-    [SerializeField] private float packetInterval = 10f; // 서버 패킷 수신 주기 (초 단위)
+    [SerializeField] private float smoothTime = 1.2f;   // 시각적 보간 시간 (틱 주기의 약 25% 권장)
 
     [Header("Visual Effects")]
     [SerializeField] private TrailRenderer trailRenderer;
-    [SerializeField] private float rotationSpeed = 15f; // 행성 자전 속도
+    [SerializeField] private float rotationSpeed = 15f; 
 
     [System.Serializable]
     public class SatelliteData
@@ -28,10 +28,12 @@ public class PlanetController : MonoBehaviour
     [SerializeField] 
     private List<SatelliteData> satellites = new List<SatelliteData>();
 
-    private Vector3 networkPosition;
+    // 보간을 위한 논리적 좌표 및 내부 속도 변수
+    private Vector3 logicalPosition;
     private Vector3 networkVelocity;
+    private Vector3 visualVelocity = Vector3.zero;
+    
     private bool isInitialized = false;
-
     private const float SECTOR_SIZE = 1000f; 
 
     public void UpdateSnapshot(Vector3Int planetSector, Vector3 planetLocalPos, Vector3 serverVel, Vector3Int cameraSector)
@@ -48,12 +50,13 @@ public class PlanetController : MonoBehaviour
             return;
         }
 
-        // 초기화 전이거나 오차가 임계값을 넘으면 즉시 이동
+        // 초기화 전이거나 오차가 임계값을 넘으면 즉시 이동 (Snap)
         if (!isInitialized || Vector3.Distance(transform.position, targetPosition) > snapDistance)
         {
+            logicalPosition = targetPosition;
             transform.position = targetPosition;
-            networkPosition = targetPosition;
             networkVelocity = serverVel;
+            visualVelocity = Vector3.zero;
             isInitialized = true;
 
             if (trailRenderer != null)
@@ -63,14 +66,9 @@ public class PlanetController : MonoBehaviour
             return;
         }
 
-        // 예측 위치와 서버 실제 위치 간의 오차 계산
-        Vector3 error = targetPosition - networkPosition;
-
-        // 다음 패킷이 올 때까지 오차를 나누어 흡수하도록 속도 보정
-        networkVelocity = serverVel + (error / packetInterval);
-        
-        // 기준 위치는 서버 위치로 갱신
-        networkPosition = targetPosition;
+        // 새로운 패킷 도착 시 논리적 좌표와 속도를 최신 서버 값으로 덮어씌움 (Visual Ghost 보간)
+        logicalPosition = targetPosition;
+        networkVelocity = serverVel;
     }
 
     private void Update()
@@ -79,9 +77,11 @@ public class PlanetController : MonoBehaviour
 
         float dt = Time.deltaTime;
 
-        // 보정된 속도로 예측 이동 수행
-        networkPosition += networkVelocity * dt;
-        transform.position = networkPosition;
+        // 1. 논리적 위치는 서버가 부여한 속도(networkVelocity)로만 정직하게 직선 예측 이동
+        logicalPosition += networkVelocity * dt;
+        
+        // 2. 실제 시각적 객체(transform)는 논리적 위치를 스프링처럼 부드럽게 따라감
+        transform.position = Vector3.SmoothDamp(transform.position, logicalPosition, ref visualVelocity, smoothTime);
 
         // Y축 기준으로 자전 수행 (가로 무늬와 수평 유지)
         transform.Rotate(Vector3.up * rotationSpeed * dt);
@@ -91,7 +91,9 @@ public class PlanetController : MonoBehaviour
 
     public void ApplyWorldShift(Vector3 amount)
     {
-        networkPosition -= amount;
+        // 월드 쉬프트 시 논리적 위치와 시각적 위치 모두 보정
+        logicalPosition -= amount;
+        transform.position -= amount;
     }
 
     private void UpdateSatellites(float timeSec)

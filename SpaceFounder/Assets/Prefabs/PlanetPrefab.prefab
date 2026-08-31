@@ -130,9 +130,10 @@ MonoBehaviour:
   planetName: 
   ownerName: 
   isDefaultPlanet: 0
-  smoothSpeed: 10
   snapDistance: 100
+  smoothTime: 1.2
   trailRenderer: {fileID: 0}
+  rotationSpeed: 15
   satellites: []
 --- !u!96 &5354976242308637810
 TrailRenderer:
@@ -249,7 +250,7 @@ TrailRenderer:
     textureScale: {x: 1, y: 1}
     shadowBias: 0.5
     generateLightingData: 0
-  m_MinVertexDistance: 0.1
+  m_MinVertexDistance: 1
   m_Autodestruct: 0
   m_Emitting: 1
   m_ApplyActiveColorSpace: 1

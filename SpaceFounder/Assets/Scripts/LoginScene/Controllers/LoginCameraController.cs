@@ -12,11 +12,6 @@ public class LoginCameraController : MonoBehaviour
     [SerializeField] private float currentDistance = 1.4f;
     [SerializeField] private float rotationSmoothness = 10f;
 
-    [Header("Zoom Settings (Optional)")]
-    [SerializeField] private float zoomSpeed = 10f;
-    [SerializeField] private float minDistance = 2f;
-    [SerializeField] private float maxDistance = 30f;
-
     private float currentRotationX;
     private float currentRotationY;
     private float targetRotationX;
