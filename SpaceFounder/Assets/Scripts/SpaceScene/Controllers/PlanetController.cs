@@ -91,7 +91,7 @@ public class PlanetController : MonoBehaviour
 
     public void ApplyWorldShift(Vector3 amount)
     {
-        // 월드 쉬프트 시 논리적 위치와 시각적 위치 모두 보정
+        // 월드 시프트 좌표 보정
         logicalPosition -= amount;
         transform.position -= amount;
     }
