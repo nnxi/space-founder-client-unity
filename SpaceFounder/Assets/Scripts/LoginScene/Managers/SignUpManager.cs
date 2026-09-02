@@ -33,6 +33,8 @@ public class SignUpManager : MonoBehaviour
             signUpButton.onClick.AddListener(OnSignUpButtonClicked);
         }
 
+        passwordInput.asteriskChar = '•';
+
         // 각 입력 필드별 독립적인 이벤트 리스너 등록
         if (usernameInput != null) usernameInput.onValueChanged.AddListener(ValidateUsername);
         if (emailInput != null) emailInput.onValueChanged.AddListener(ValidateEmail);

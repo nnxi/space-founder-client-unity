@@ -219,8 +219,12 @@ public class CameraController : MonoBehaviour
         float scroll = Input.GetAxis("Mouse ScrollWheel");
         if (Mathf.Abs(scroll) > 0.01f)
         {
+            // 타겟 행성의 반지름 계산 및 동적 최소 거리 설정
+            float planetRadius = targetPlanet.localScale.x * 0.5f;
+            float dynamicMinDistance = Mathf.Max(minDistance, planetRadius + 10f); // 10f는 카메라가 표면을 뚫지 않게 하는 여유 공간
+
             currentDistance -= scroll * zoomSpeed;
-            currentDistance = Mathf.Clamp(currentDistance, minDistance, maxDistance);
+            currentDistance = Mathf.Clamp(currentDistance, dynamicMinDistance, maxDistance);
         }
 
         // 좌클릭 또는 우클릭 드래그 시 회전
@@ -300,8 +304,8 @@ public class CameraController : MonoBehaviour
         if (Input.GetKey(KeyCode.S)) moveInput -= transform.forward;
         if (Input.GetKey(KeyCode.A)) moveInput -= transform.right;
         if (Input.GetKey(KeyCode.D)) moveInput += transform.right;
-        if (Input.GetKey(KeyCode.E)) moveInput += transform.up;
-        if (Input.GetKey(KeyCode.Q)) moveInput -= transform.up;
+        if (Input.GetKey(KeyCode.Q)) moveInput += transform.up;
+        if (Input.GetKey(KeyCode.E)) moveInput -= transform.up;
 
         float scroll = Input.GetAxis("Mouse ScrollWheel");
         if (Mathf.Abs(scroll) > 0.01f)

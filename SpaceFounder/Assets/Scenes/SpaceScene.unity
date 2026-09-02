@@ -5355,7 +5355,7 @@ Camera:
     y: 0
     width: 1
     height: 1
-  near clip plane: 0.3
+  near clip plane: 0.1
   far clip plane: 500000
   field of view: 60
   orthographic: 0
@@ -5721,7 +5721,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 70c517efc545c774e9de4a4e3b5963d2, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::WorldManager
-  planetPrefab: {fileID: 5802078565419502550, guid: 99aba168a85af3644aee1dd8f5234924, type: 3}
+  userPlanetPrefab: {fileID: 5802078565419502550, guid: 99aba168a85af3644aee1dd8f5234924, type: 3}
+  staticPlanetPrefab: {fileID: 5802078565419502550, guid: 65afcf1c42d214d59b334b4258232c00, type: 3}
   scaleFactor: 0.01
   sectorSize: 1000
 --- !u!4 &390598942
@@ -5775,7 +5776,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 1}
   m_AnchorMax: {x: 0, y: 1}
-  m_AnchoredPosition: {x: 170, y: -125}
+  m_AnchoredPosition: {x: 170, y: -90}
   m_SizeDelta: {x: 200, y: 30}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &395258653
@@ -6835,7 +6836,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 1, y: 1}
   m_AnchorMax: {x: 1, y: 1}
-  m_AnchoredPosition: {x: -320, y: -130}
+  m_AnchoredPosition: {x: -320, y: -90}
   m_SizeDelta: {x: 500, y: 50}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &1373077309

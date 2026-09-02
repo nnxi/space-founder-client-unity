@@ -1,13 +1,22 @@
 using UnityEngine;
+using System.Collections.Generic;
 
 [RequireComponent(typeof(Renderer))]
 public class PlanetShader : MonoBehaviour
 {
     private const string ShaderName = "Custom/ProceduralPlanet";
     private static Shader cachedShader;
+
+    private Vector4[] lightDirs = new Vector4[3];
+    private Vector4[] lightColors = new Vector4[3];
     
     private Renderer planetRenderer;
     private MaterialPropertyBlock propBlock;
+
+    // 활성화된 모든 항성을 추적
+    public static HashSet<PlanetShader> ActiveStars = new HashSet<PlanetShader>();
+    private bool isStar = false;
+    private Vector3 currentLightDir = new Vector3(1, 1, 0.5f);
 
     private void Awake()
     {
@@ -17,32 +26,16 @@ public class PlanetShader : MonoBehaviour
 
     public void ApplyShader(int planetId, string planetType, string colorHex)
     {
-        if (planetRenderer == null)
-        {
-            Debug.LogError("[PlanetShader] Renderer component not found.");
-            return;
-        }
+        if (planetRenderer == null) return;
+        if (cachedShader == null) cachedShader = Shader.Find(ShaderName);
 
-        if (cachedShader == null)
-        {
-            cachedShader = Shader.Find(ShaderName);
-            if (cachedShader == null)
-            {
-                Debug.LogError($"[PlanetShader] Shader not found: {ShaderName}");
-                return;
-            }
-        }
-
-        // 매터리얼 인스턴스가 없다면 공유 매터리얼로 초기화
         if (planetRenderer.sharedMaterial == null || planetRenderer.sharedMaterial.shader != cachedShader)
         {
             planetRenderer.sharedMaterial = new Material(cachedShader);
         }
 
-        // PropertyBlock을 가져와 파라미터 갱신 후 다시 설정 (메모리 최적화)
         planetRenderer.GetPropertyBlock(propBlock);
 
-        // 색상 적용
         Color baseColor = Color.white;
         if (!string.IsNullOrEmpty(colorHex) && ColorUtility.TryParseHtmlString(colorHex, out Color parsedColor))
         {
@@ -50,21 +43,103 @@ public class PlanetShader : MonoBehaviour
         }
         propBlock.SetColor("_BaseColor", baseColor);
 
-        // 시드 적용
         float seed = planetId * 137.54f;
         propBlock.SetFloat("_Seed", seed);
 
-        // 타입 적용
         int typeInt = 0;
         if (!string.IsNullOrEmpty(planetType))
         {
             string lowerType = planetType.ToLower();
-            if (lowerType == "gaseous") typeInt = 1;
-            else if (lowerType == "icy") typeInt = 2;
+            if (lowerType == "gaseous" || lowerType == "gas") typeInt = 1;
+            else if (lowerType == "icy" || lowerType == "ice") typeInt = 2;
+            else if (lowerType == "lava") typeInt = 3;
+            else if (lowerType == "star") typeInt = 4;
         }
         propBlock.SetInt("_PlanetType", typeInt);
 
-        // 갱신된 PropertyBlock 적용
         planetRenderer.SetPropertyBlock(propBlock);
+
+        HandleStarLight(typeInt, baseColor);
+    }
+
+    private void HandleStarLight(int typeInt, Color lightColor)
+    {
+        Light pointLight = GetComponent<Light>();
+
+        if (typeInt == 4)
+        {
+            isStar = true;
+            ActiveStars.Add(this); 
+
+            if (pointLight == null) pointLight = gameObject.AddComponent<Light>();
+            pointLight.type = LightType.Point;
+            pointLight.range = 4000f; 
+            pointLight.intensity = 5f; 
+            pointLight.color = lightColor;
+        }
+        else if (pointLight != null)
+        {
+            Destroy(pointLight);
+        }
+    }
+
+    private void Update()
+    {
+        if (isStar || ActiveStars.Count == 0) return;
+
+        // 가장 가까운 항성 3개를 찾기 위한 임시 리스트 구조
+        var stars = new List<KeyValuePair<float, PlanetShader>>();
+
+        foreach (var star in ActiveStars)
+        {
+            if (star == null) continue;
+            float distSq = (star.transform.position - transform.position).sqrMagnitude;
+            stars.Add(new KeyValuePair<float, PlanetShader>(distSq, star));
+        }
+
+        // 거리 기준 오름차순 정렬
+        stars.Sort((x, y) => x.Key.CompareTo(y.Key));
+
+        // 배열 초기화
+        for (int i = 0; i < 3; i++)
+        {
+            lightDirs[i] = Vector4.zero;
+            lightColors[i] = Vector4.zero;
+        }
+
+        // 상위 최대 3개의 항성 데이터 추출
+        int limit = Mathf.Min(3, stars.Count);
+        for (int i = 0; i < limit; i++)
+        {
+            PlanetShader star = stars[i].Value;
+            float distSq = stars[i].Key;
+
+            if (distSq < 1f) continue;
+
+            Vector3 dir = (star.transform.position - transform.position).normalized;
+            // 거리 역제곱에 비례하는 광원 가중치 계산 (임의의 감쇠 상수 적용)
+            float intensity = Mathf.Clamp01(10000000f / distSq); 
+
+            // xyz는 방향, w는 빛의 세기
+            lightDirs[i] = new Vector4(dir.x, dir.y, dir.z, intensity);
+            
+            // 항성의 색상을 가져옴
+            Color sColor = star.propBlock.GetColor("_BaseColor");
+            lightColors[i] = new Vector4(sColor.r, sColor.g, sColor.b, 1f);
+        }
+
+        // 쉐이더로 다중 배열 데이터 전송
+        planetRenderer.GetPropertyBlock(propBlock);
+        propBlock.SetVectorArray("_LightDirs", lightDirs);
+        propBlock.SetVectorArray("_LightColors", lightColors);
+        planetRenderer.SetPropertyBlock(propBlock);
+    }
+
+    private void OnDestroy()
+    {
+        if (isStar)
+        {
+            ActiveStars.Remove(this);
+        }
     }
 }

@@ -8,7 +8,9 @@ public class WorldManager : MonoBehaviour
     public static WorldManager Instance { get; private set; }
 
     [Header("Prefabs & Scaling")]
-    [SerializeField] private GameObject planetPrefab;
+    // 프리팹 2종류로 분리
+    [SerializeField] private GameObject userPlanetPrefab;
+    [SerializeField] private GameObject staticPlanetPrefab;
     [SerializeField] private float scaleFactor = 0.01f;
     [SerializeField] private float sectorSize = 1000f;
 
@@ -43,23 +45,20 @@ public class WorldManager : MonoBehaviour
         }
     }
 
-    // NetworkManager에서 최초 접속 시 1회 호출
     public void InitializePlayer(int planetId, Vector3Int initialSector)
     {
         MyPlanetId = planetId;
         BaseSector = initialSector;
         UpdateCameraSector(initialSector, true);
-        Debug.Log($"[WorldManager] 플레이어 초기화 완료 - ID: {MyPlanetId}, 초기 섹터: {initialSector}");
+        Debug.Log($"[WorldManager] Player init - ID: {MyPlanetId}, Sector: {initialSector}");
     }
 
-    // CameraChunkTracker에서 섹터 변경을 감지했을 때 호출
     public void UpdateCameraSector(Vector3Int newSector, bool forceUpdate = false)
     {
         if (!forceUpdate && CurrentCameraSector == newSector) return;
 
         CurrentCameraSector = newSector;
 
-        // 중심 섹터를 기준으로 3x3x3 (27개) 구독망 생성
         List<Vector3Int> gridSectors = new List<Vector3Int>();
         for (int x = -1; x <= 1; x++)
         {
@@ -72,16 +71,12 @@ public class WorldManager : MonoBehaviour
             }
         }
 
-        Debug.Log($"newSector received: {newSector}");
-
-        // NetworkManager를 통해 구독 발송
         if (NetworkManager.Instance != null)
         {
             NetworkManager.Instance.EmitSubscribeGrid(gridSectors);
         }
     }
 
-    // CameraController 등 외부 스크립트에서 내 행성 위치를 네트워크로 요청할 때 사용하는 중간다리
     public void RequestMyPlanetLocation(Action<Vector3Int, Vector3> onLocationReceived)
     {
         if (NetworkManager.Instance != null)
@@ -105,6 +100,30 @@ public class WorldManager : MonoBehaviour
             string type = string.IsNullOrEmpty(sp.userType) ? "user" : sp.userType;
             string key = $"{type}_{sp.planetId}";
             staticDataMap[key] = sp;
+
+            if (type == "default" && !activePlanets.ContainsKey(key))
+            {
+                Vector3 scaledLocalPos = sp.localPosition.ToVector3() * scaleFactor;
+                Vector3 absolutePosition = CalculateAbsolutePosition(sp.chunkIndex.ToVector3Int(), scaledLocalPos);
+
+                // 정적 행성이므로 staticPlanetPrefab 사용
+                GameObject newPlanet = Instantiate(staticPlanetPrefab, absolutePosition, Quaternion.identity);
+                
+                newPlanet.transform.localScale = GetPlanetScale(sp.planetType, sp.planetId);
+                newPlanet.name = $"{key}_{sp.planetName}";
+
+                PlanetController controller = newPlanet.GetComponent<PlanetController>();
+                if (controller != null)
+                {
+                    controller.UpdateSnapshot(sp.chunkIndex.ToVector3Int(), scaledLocalPos, Vector3.zero, CurrentCameraSector);
+                    controller.SetPlanetData(sp.planetName, sp.username, true);
+                }
+
+                PlanetShader shaderComp = newPlanet.GetComponent<PlanetShader>();
+                if (shaderComp != null) shaderComp.ApplyShader(sp.planetId, sp.planetType, sp.colorHex);
+
+                activePlanets.Add(key, newPlanet);
+            }
         }
     }
 
@@ -115,15 +134,13 @@ public class WorldManager : MonoBehaviour
 
     private void ProcessWorldUpdate(DecodedPlanetSnapshot[] planets)
     {
-        if (planetPrefab == null) return;
+        if (userPlanetPrefab == null || staticPlanetPrefab == null) return;
 
         HashSet<string> currentFrameKeys = new HashSet<string>();
 
         foreach (var pData in planets)
         {
             int rawId = pData.id;
-            
-            // 바이너리 프로토콜 약속: 음수면 default, 양수면 user
             bool isDefault = rawId < 0;
             int actualId = Mathf.Abs(rawId);
             
@@ -152,7 +169,10 @@ public class WorldManager : MonoBehaviour
             else
             {
                 Vector3 absolutePosition = CalculateAbsolutePosition(pData.sectorIndex, scaledLocalPos);
-                GameObject newPlanet = Instantiate(planetPrefab, absolutePosition, Quaternion.identity);
+                
+                // 타입에 따라 생성할 프리팹 결정
+                GameObject prefabToInstantiate = isDefault ? staticPlanetPrefab : userPlanetPrefab;
+                GameObject newPlanet = Instantiate(prefabToInstantiate, absolutePosition, Quaternion.identity);
 
                 PlanetController controller = newPlanet.GetComponent<PlanetController>();
                 if (controller != null)
@@ -162,6 +182,8 @@ public class WorldManager : MonoBehaviour
 
                 if (hasStaticData)
                 {
+                    newPlanet.transform.localScale = GetPlanetScale(staticData.planetType, actualId);
+
                     PlanetShader shaderComp = newPlanet.GetComponent<PlanetShader>();
                     if (shaderComp != null) shaderComp.ApplyShader(actualId, staticData.planetType, staticData.colorHex);
                     newPlanet.name = $"{uniqueKey}_{staticData.planetName}";
@@ -171,7 +193,11 @@ public class WorldManager : MonoBehaviour
                     newPlanet.name = uniqueKey;
                 }
 
-                controller.SetPlanetData(staticData.planetName, staticData.username, isDefault);
+                // 정적 여부를 isDefault 값으로 판단하여 컨트롤러에 전달
+                if (controller != null)
+                {
+                    controller.SetPlanetData(staticData.planetName, staticData.username, isDefault);
+                }
 
                 activePlanets.Add(uniqueKey, newPlanet);
 
@@ -192,13 +218,15 @@ public class WorldManager : MonoBehaviour
 
         foreach (var key in activePlanets.Keys)
         {
-            if (!currentFrameKeys.Contains(key))
+            if (key.StartsWith("user_"))
             {
-                // 내 행성은 시야 밖으로 벗어나더라도 씬에서 강제 삭제되는 것을 방지
-                if (key == myPlanetKey) continue;
+                if (!currentFrameKeys.Contains(key))
+                {
+                    if (key == myPlanetKey) continue;
 
-                Destroy(activePlanets[key]);
-                toRemove.Add(key);
+                    Destroy(activePlanets[key]);
+                    toRemove.Add(key);
+                }
             }
         }
 
@@ -215,6 +243,32 @@ public class WorldManager : MonoBehaviour
             sector.y * sectorSize + localPos.y,
             sector.z * sectorSize + localPos.z
         );
+    }
+
+    private Vector3 GetPlanetScale(string planetType, int planetId)
+    {
+        if (string.IsNullOrEmpty(planetType)) return Vector3.one;
+
+        string lowerType = planetType.ToLower();
+        
+        float randomVariance = 0.8f + ((Mathf.Abs(planetId) % 100) / 100f) * 0.4f;
+
+        switch (lowerType)
+        {
+            case "star":
+                return Vector3.one * 70f * randomVariance; 
+            case "lava":
+                return Vector3.one * 25f * randomVariance; 
+            case "gaseous":
+            case "gas":
+                return Vector3.one * 8f * randomVariance; 
+            case "icy":
+            case "ice":
+                return Vector3.one * 1.5f * randomVariance; 
+            case "rocky":
+            default:
+                return Vector3.one * 1f * randomVariance; 
+        }
     }
 
     public PlanetController GetPlanetController(int planetId, string userType = "user")
@@ -243,15 +297,17 @@ public class WorldManager : MonoBehaviour
         {
             if (planetObj == null) continue;
 
-            // 유니티 실제 위치(transform) 이동
-            planetObj.transform.position -= shiftAmount;
-
-            // PlanetController 내부의 networkPosition도 시프트해주어야 
-            // Update()의 보간(Dead Reckoning) 과정에서 다시 예전 위치로 돌아가지 않습니다.
             PlanetController controller = planetObj.GetComponent<PlanetController>();
+
+            // 트레일 렌더러가 있는 유저 행성은 컨트롤러 내부에서 렌더러 배열 수정 후 이동을 처리
             if (controller != null)
             {
                 controller.ApplyWorldShift(shiftAmount);
+            }
+            else
+            {
+                // 컨트롤러가 없는 단순 배경/정적 오브젝트는 여기서 직접 이동
+                planetObj.transform.position -= shiftAmount;
             }
         }
     }

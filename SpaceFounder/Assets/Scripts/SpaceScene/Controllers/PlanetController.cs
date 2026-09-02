@@ -10,11 +10,13 @@ public class PlanetController : MonoBehaviour
 
     [Header("Network Settings")]
     [SerializeField] private float snapDistance = 300f; 
-    [SerializeField] private float smoothTime = 1.2f;   // 시각적 보간 시간 (틱 주기의 약 25% 권장)
+    [SerializeField] private float smoothTime = 1.2f;   // 시각적 보간 시간
 
     [Header("Visual Effects")]
-    [SerializeField] private TrailRenderer trailRenderer;
+    private bool isStaticPlanet = false;
     [SerializeField] private float rotationSpeed = 15f; 
+
+    [SerializeField] private TrailRenderer trailRenderer;
 
     [System.Serializable]
     public class SatelliteData
@@ -59,16 +61,26 @@ public class PlanetController : MonoBehaviour
             visualVelocity = Vector3.zero;
             isInitialized = true;
 
-            if (trailRenderer != null)
-            {
-                trailRenderer.Clear();
-            }
             return;
         }
 
-        // 새로운 패킷 도착 시 논리적 좌표와 속도를 최신 서버 값으로 덮어씌움 (Visual Ghost 보간)
+        // 새로운 패킷 도착 시 논리적 좌표와 속도를 최신 서버 값으로 덮어씌움
         logicalPosition = targetPosition;
         networkVelocity = serverVel;
+
+        if (!isStaticPlanet) 
+        {
+            // 속도 벡터의 크기(magnitude) 출력
+            Debug.Log($"[Gravity Check] Velocity Magnitude: {networkVelocity.magnitude}");
+        }
+    }
+
+    private void Awake()
+    {
+        if (trailRenderer == null)
+        {
+            trailRenderer = GetComponent<TrailRenderer>();
+        }
     }
 
     private void Update()
@@ -77,13 +89,26 @@ public class PlanetController : MonoBehaviour
 
         float dt = Time.deltaTime;
 
-        // 1. 논리적 위치는 서버가 부여한 속도(networkVelocity)로만 정직하게 직선 예측 이동
-        logicalPosition += networkVelocity * dt;
-        
-        // 2. 실제 시각적 객체(transform)는 논리적 위치를 스프링처럼 부드럽게 따라감
-        transform.position = Vector3.SmoothDamp(transform.position, logicalPosition, ref visualVelocity, smoothTime);
+        // 정적 행성(배경 행성)이 아닐 때만 위치 보간 연산 수행
+        if (!isStaticPlanet)
+        {
+            // 1. 논리적 위치는 서버가 부여한 속도로 직선 예측 이동
+            logicalPosition += networkVelocity * dt;
+            
+            // 2. 실제 시각적 객체(transform)는 논리적 위치를 부드럽게 따라감
+            transform.position = Vector3.SmoothDamp(transform.position, logicalPosition, ref visualVelocity, smoothTime);
 
-        // Y축 기준으로 자전 수행 (가로 무늬와 수평 유지)
+            if (networkVelocity.sqrMagnitude > 0.01f)
+            {
+                // 속도 벡터를 정규화하여 순수한 방향만 추출
+                Vector3 moveDirection = networkVelocity.normalized;
+                
+                // 씬 뷰에서 이동 방향을 가리키는 붉은 선 출력 (길이 1000)
+                Debug.DrawRay(transform.position, moveDirection * 1000f, Color.red);
+            }
+        }
+
+        // Y축 기준으로 자전 수행 (정적 행성도 자전 수행)
         transform.Rotate(Vector3.up * rotationSpeed * dt);
 
         UpdateSatellites(Time.time);
@@ -91,8 +116,32 @@ public class PlanetController : MonoBehaviour
 
     public void ApplyWorldShift(Vector3 amount)
     {
-        // 월드 시프트 좌표 보정
+        // 정적 행성은 트레일 보간 없이 실제 오브젝트 위치만 즉시 이동 후 종료
+        if (isStaticPlanet)
+        {
+            transform.position -= amount;
+            return;
+        }
+
+        // 유저 행성의 논리적 목표 좌표 이동 및 보간 가속도 초기화
         logicalPosition -= amount;
+        visualVelocity = Vector3.zero;
+
+        // 트레일 렌더러 점 배열 통째로 시프트
+        if (trailRenderer != null && trailRenderer.positionCount > 0)
+        {
+            Vector3[] trailPoints = new Vector3[trailRenderer.positionCount];
+            trailRenderer.GetPositions(trailPoints);
+
+            for (int i = 0; i < trailPoints.Length; i++)
+            {
+                trailPoints[i] -= amount;
+            }
+
+            trailRenderer.SetPositions(trailPoints);
+        }
+
+        // 유저 행성의 실제 오브젝트 위치 이동
         transform.position -= amount;
     }
 
@@ -139,5 +188,8 @@ public class PlanetController : MonoBehaviour
         this.planetName = name;
         this.ownerName = owner;
         this.isDefaultPlanet = isDefault;
+        
+        // 정적 행성 상태 저장
+        this.isStaticPlanet = isDefault;
     }
 }

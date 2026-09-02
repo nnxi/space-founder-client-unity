@@ -43,6 +43,8 @@ public struct StaticPlanetData
     public string colorHex { get; set; }
     public string planetType { get; set; }
     public int constellationId { get; set; }
+    public Vector3IntData chunkIndex { get; set; }
+    public Vector3Data localPosition { get; set; }
 }
 
 [Serializable]
@@ -166,7 +168,17 @@ public class NetworkManager : MonoBehaviour
                 
                 Debug.Log($"<color=yellow>[NetworkManager] 2. Received sector:joined -> Room: {joinedData.room}, StaticPlanets: {planetCount}ea</color>");
                 
-                if (joinedData.staticPlanets != null) 
+                // [TEST>
+                if (joinedData.staticPlanets != null)
+                {
+                    foreach (var p in joinedData.staticPlanets)
+                    {
+                        Debug.Log($"<color=white>[Planet Detail] ID: {p.planetId} / {p.planetName} ({p.planetType}) / Chunk: ({p.chunkIndex.x},{p.chunkIndex.y},{p.chunkIndex.z}) / Local: ({p.localPosition.x},{p.localPosition.y},{p.localPosition.z})</color>");
+                    }
+                }
+                // <TEST]
+
+                if (joinedData.staticPlanets != null)
                 {
                     UnityMainThreadDispatcher.Instance().Enqueue(() =>
                     {

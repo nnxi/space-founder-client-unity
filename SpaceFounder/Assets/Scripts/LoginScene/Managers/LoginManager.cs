@@ -41,6 +41,7 @@ public class LoginManager : MonoBehaviour
         }
         if (passwordInput != null)
         {
+            passwordInput.asteriskChar = '•';
             passwordInput.onValueChanged.AddListener(OnInputValueChanged);
         }
 
