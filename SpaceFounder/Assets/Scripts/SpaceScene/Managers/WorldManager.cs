@@ -116,7 +116,7 @@ public class WorldManager : MonoBehaviour
                 if (controller != null)
                 {
                     controller.UpdateSnapshot(sp.chunkIndex.ToVector3Int(), scaledLocalPos, Vector3.zero, CurrentCameraSector);
-                    controller.SetPlanetData(sp.planetName, sp.username, true);
+                    controller.SetPlanetData(sp.planetName, sp.username, sp.planetType, true);
                 }
 
                 PlanetShader shaderComp = newPlanet.GetComponent<PlanetShader>();
@@ -196,7 +196,7 @@ public class WorldManager : MonoBehaviour
                 // 정적 여부를 isDefault 값으로 판단하여 컨트롤러에 전달
                 if (controller != null)
                 {
-                    controller.SetPlanetData(staticData.planetName, staticData.username, isDefault);
+                    controller.SetPlanetData(staticData.planetName, staticData.username, staticData.planetType, isDefault);
                 }
 
                 activePlanets.Add(uniqueKey, newPlanet);

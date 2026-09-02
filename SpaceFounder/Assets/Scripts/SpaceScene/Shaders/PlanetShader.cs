@@ -10,6 +10,9 @@ public class PlanetShader : MonoBehaviour
     private Vector4[] lightDirs = new Vector4[3];
     private Vector4[] lightColors = new Vector4[3];
     
+    // 메모리 재할당(GC) 방지를 위한 리스트 캐싱
+    private List<KeyValuePair<float, PlanetShader>> sortedStars = new List<KeyValuePair<float, PlanetShader>>();
+    
     private Renderer planetRenderer;
     private MaterialPropertyBlock propBlock;
 
@@ -87,18 +90,18 @@ public class PlanetShader : MonoBehaviour
     {
         if (isStar || ActiveStars.Count == 0) return;
 
-        // 가장 가까운 항성 3개를 찾기 위한 임시 리스트 구조
-        var stars = new List<KeyValuePair<float, PlanetShader>>();
+        // 매 프레임 할당하던 리스트를 비우고 재사용
+        sortedStars.Clear();
 
         foreach (var star in ActiveStars)
         {
             if (star == null) continue;
             float distSq = (star.transform.position - transform.position).sqrMagnitude;
-            stars.Add(new KeyValuePair<float, PlanetShader>(distSq, star));
+            sortedStars.Add(new KeyValuePair<float, PlanetShader>(distSq, star));
         }
 
         // 거리 기준 오름차순 정렬
-        stars.Sort((x, y) => x.Key.CompareTo(y.Key));
+        sortedStars.Sort((x, y) => x.Key.CompareTo(y.Key));
 
         // 배열 초기화
         for (int i = 0; i < 3; i++)
@@ -108,11 +111,11 @@ public class PlanetShader : MonoBehaviour
         }
 
         // 상위 최대 3개의 항성 데이터 추출
-        int limit = Mathf.Min(3, stars.Count);
+        int limit = Mathf.Min(3, sortedStars.Count);
         for (int i = 0; i < limit; i++)
         {
-            PlanetShader star = stars[i].Value;
-            float distSq = stars[i].Key;
+            PlanetShader star = sortedStars[i].Value;
+            float distSq = sortedStars[i].Key;
 
             if (distSq < 1f) continue;
 

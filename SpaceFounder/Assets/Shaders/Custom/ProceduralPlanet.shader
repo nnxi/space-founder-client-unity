@@ -36,9 +36,9 @@ Shader "Custom/ProceduralPlanet"
             float _Seed;
             int _PlanetType;
             
-            // C#에서 넘겨받는 전역 항성 좌표
-            uniform float4 _GlobalStarPosition;
-            float4 _CustomLightDir;
+            // C#에서 넘겨받는 다중 광원 데이터 (최대 3개)
+            uniform float4 _LightDirs[3]; 
+            uniform float4 _LightColors[3];
 
             float hash(float3 p) 
             {
@@ -168,7 +168,6 @@ Shader "Custom/ProceduralPlanet"
                     
                     finalColor = lerp(crust, magma, saturate(cracks * 2.0 + (heat * rand1)));
                     
-                    // 용암 행성은 마그마 틈새가 스스로 빛을 냄
                     emissionColor = magma * saturate(cracks * 2.5);
                     atmosphereColor = float3(1.0, 0.2, 0.0);
                 }
@@ -180,31 +179,43 @@ Shader "Custom/ProceduralPlanet"
                     
                     finalColor = lerp(starCore, corona, flare) * 1.2;
                     
-                    // 항성은 전체가 스스로 발광함
                     emissionColor = finalColor;
                     atmosphereColor = corona;
                 }
 
-                float3 lightDir = normalize(float3(1.0, 1.0, 0.5)); 
-
-                if (length(_CustomLightDir.xyz) > 0.1) 
-                {
-                    lightDir = normalize(_CustomLightDir.xyz);
-                }
-
-                float NdotL = max(0.02, dot(normalize(i.normal), lightDir));
+                // --- [다중 광원(최대 3개) 누적 연산부] ---
+                float3 N = normalize(i.normal);
+                float3 diffuseAccumulation = float3(0,0,0);
 
                 if (_PlanetType == 4) 
                 {
-                    NdotL = 1.0; // 항성은 어두운 면이 없음
+                    // 항성은 조명을 무시하고 자체 발광 100%
+                    diffuseAccumulation = finalColor;
+                }
+                else
+                {
+                    // C#에서 넘겨준 3개의 항성 데이터를 순회하며 빛을 누적
+                    for (int j = 0; j < 3; j++)
+                    {
+                        float intensity = _LightDirs[j].w;
+                        if (intensity > 0.0)
+                        {
+                            float3 lDir = normalize(_LightDirs[j].xyz);
+                            float NdotL = max(0.0, dot(N, lDir));
+                            
+                            diffuseAccumulation += finalColor * _LightColors[j].rgb * NdotL * intensity;
+                        }
+                    }
+                    
+                    // 우주 공간의 최소 밝기(Ambient) 보정 (완전한 암흑 방지)
+                    diffuseAccumulation = max(diffuseAccumulation, finalColor * 0.02);
                 }
 
-                // 행성에 명암(그림자) 적용 후 발광(Emission) 더하기
-                finalColor = (finalColor * NdotL) + emissionColor;
+                finalColor = diffuseAccumulation + emissionColor;
 
                 // 림 라이트 처리 (빛을 받는 면에만 대기광 형성)
                 float3 viewDir = normalize(_WorldSpaceCameraPos - i.worldPos);
-                float rim = 1.0 - max(0.0, dot(normalize(i.normal), viewDir));
+                float rim = 1.0 - max(0.0, dot(N, viewDir));
                 rim = smoothstep(0.5, 1.0, rim);
                 
                 if (_PlanetType == 4) 
@@ -213,8 +224,7 @@ Shader "Custom/ProceduralPlanet"
                 }
                 else 
                 {
-                    // 어두운 뒷면에서는 대기광이 보이지 않도록 NdotL 곱함
-                    finalColor += atmosphereColor * rim * 0.6 * NdotL;
+                    finalColor += atmosphereColor * rim * 0.6;
                 }
 
                 return fixed4(finalColor, 1.0);

@@ -15,7 +15,7 @@ GameObject:
   - component: {fileID: -5983036026058975897}
   - component: {fileID: 5354976242308637810}
   - component: {fileID: 1451550389194092370}
-  m_Layer: 0
+  m_Layer: 6
   m_Name: userPlanetPrefab
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -133,6 +133,10 @@ MonoBehaviour:
   snapDistance: 100
   smoothTime: 1.2
   rotationSpeed: 15
+  trailRenderer: {fileID: 0}
+  planetLayer:
+    serializedVersion: 2
+    m_Bits: 64
   satellites: []
 --- !u!96 &5354976242308637810
 TrailRenderer:

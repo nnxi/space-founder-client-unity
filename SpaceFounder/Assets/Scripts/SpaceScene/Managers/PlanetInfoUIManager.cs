@@ -28,11 +28,18 @@ public class PlanetInfoUIManager : MonoBehaviour
         }
     }
 
-    public void ShowPlanetInfo(string pName, string pOwner, bool isDefault)
+    public void ShowPlanetInfo(string pName, string pOwner, string pType, bool isDefault)
     {
         if (infoPanelRect == null) return;
 
-        nameText.text = $"Planet name: {pName}";
+        if (pType != "star")
+        {
+            nameText.text = $"Planet name: {pName}";
+        }
+        else
+        {
+            nameText.text = $"Star name: {pName}";
+        }
 
         // Owner 텍스트 표시 분기 처리
         if (isDefault || string.IsNullOrEmpty(pOwner))
