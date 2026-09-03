@@ -90,19 +90,30 @@ public class NetworkManager : MonoBehaviour
     {
         string token = UserManager.Instance.AuthToken;
 
-        // 토큰이 없거나 유효하지 않은 경우
         if (string.IsNullOrEmpty(token))
         {
-            Debug.LogError("[NetworkManager] 유효한 인증 토큰이 없습니다. 로그인 씬으로 돌아갑니다.");
+            Debug.LogError("[NetworkManager] No valid auth token found. Returning to login scene.");
             
-            // 유저 데이터 및 로컬 스토리지 초기화
             UserManager.Instance.ClearUserData();
             PlayerPrefs.DeleteKey("AuthToken");
             PlayerPrefs.Save();
 
-            // 로그인 씬으로 강제 이동
             SceneManager.LoadScene("LoginScene");
             return;
+        }
+
+        // UserManager의 BaseUrl이 비어있을 경우 동적으로 절대 주소 할당
+        string socketUrl = UserManager.Instance.BaseUrl;
+
+        if (string.IsNullOrEmpty(socketUrl))
+        {
+#if UNITY_WEBGL && !UNITY_EDITOR
+            // WebGL 빌드 환경: 현재 브라우저의 접속 주소(Render URL)를 자동으로 가져옴
+            socketUrl = Application.absoluteURL;
+#else
+            // 에디터 환경: 기본 로컬 주소 폴백
+            socketUrl = "http://localhost:3000";
+#endif
         }
 
         var options = new SocketIOOptions
@@ -115,7 +126,8 @@ public class NetworkManager : MonoBehaviour
             AutoUpgrade = true
         };
 
-        socket = new SocketIO(UserManager.Instance.ApiBaseUrl, options);
+        // 완성된 절대 주소(예: https://space-founder.onrender.com/)를 전달
+        socket = new SocketIO(socketUrl, options);
 
         RegisterSocketEvents();
 
@@ -274,11 +286,12 @@ public class NetworkManager : MonoBehaviour
         });
     }
 
-    private async void OnApplicationQuit()
+    public async void OnApplicationQuit()
     {
         if (IsConnected)
         {
             await socket.DisconnectAsync();
         }
+        socket = null;
     }
 }

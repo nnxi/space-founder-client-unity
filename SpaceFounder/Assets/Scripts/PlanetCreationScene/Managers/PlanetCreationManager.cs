@@ -19,6 +19,7 @@ public class PlanetCreationManager : MonoBehaviour
     public Button generateRandomButton;
     public Button launchButton;
     public TextMeshProUGUI errorText;
+    public Button logoutButton;
 
     
     private RandomPlanetGenerator planetGenerator;
@@ -42,6 +43,9 @@ public class PlanetCreationManager : MonoBehaviour
 
         if (planetNameInput != null)
             planetNameInput.onValueChanged.AddListener(ValidateInput);
+
+        if (logoutButton != null)
+            logoutButton.onClick.AddListener(OnLogoutButtonClicked);
 
         GenerateNewPlanet();
         ValidateInput(planetNameInput.text);
@@ -122,6 +126,25 @@ public class PlanetCreationManager : MonoBehaviour
         if (string.IsNullOrEmpty(planetName)) return;
 
         StartCoroutine(SubmitPlanetRoutine(planetName));
+    }
+
+    private void OnLogoutButtonClicked()
+    {
+        // NetworkManager가 존재하는 경우에만 연결 해제 및 파괴 수행
+        if (NetworkManager.Instance != null)
+        {
+            NetworkManager.Instance.OnApplicationQuit();
+            Destroy(NetworkManager.Instance.gameObject);
+        }
+
+        // 유저 데이터 및 로컬 캐시 삭제
+        if (UserManager.Instance != null)
+        {
+            UserManager.Instance.ClearUserData();
+        }
+        
+        // 로그인 씬으로 이동
+        SceneManager.LoadScene("LoginScene");
     }
 
     private IEnumerator SubmitPlanetRoutine(string planetName)

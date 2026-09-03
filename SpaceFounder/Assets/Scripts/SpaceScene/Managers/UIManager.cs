@@ -66,13 +66,21 @@ public class UserProfileUI : MonoBehaviour
 
     private void OnLogoutClicked()
     {
-        // UserManager의 로그아웃 로직 호출 (PlayerPrefs 캐시 삭제 포함)
+        // 1. 네트워크 소켓 연결 해제 및 초기화
+        if (NetworkManager.Instance != null)
+        {
+            NetworkManager.Instance.OnApplicationQuit();
+            // 다음 로그인 시 깔끔하게 재생성되도록 파괴
+            Destroy(NetworkManager.Instance.gameObject); 
+        }
+
+        // 2. 유저 데이터 및 로컬 캐시 삭제
         if (UserManager.Instance != null)
         {
             UserManager.Instance.ClearUserData();
         }
         
-        // 로그인 씬으로 이동
+        // 3. 로그인 씬으로 이동
         SceneManager.LoadScene(loginSceneName);
     }
 }
