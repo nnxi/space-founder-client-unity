@@ -71,8 +71,6 @@ public class NetworkManager : MonoBehaviour
     
     public int MyPlanetId { get; private set; } = -1;
     public bool IsConnected => socket != null && socket.Connected;
-
-    [SerializeField] private string serverUrl = "http://localhost:3000";
     private SocketIO socket;
 
     private void Awake()
@@ -117,7 +115,7 @@ public class NetworkManager : MonoBehaviour
             AutoUpgrade = true
         };
 
-        socket = new SocketIO(serverUrl, options);
+        socket = new SocketIO(UserManager.Instance.ApiBaseUrl, options);
 
         RegisterSocketEvents();
 
@@ -167,16 +165,6 @@ public class NetworkManager : MonoBehaviour
                 int planetCount = joinedData.staticPlanets != null ? joinedData.staticPlanets.Length : 0;
                 
                 Debug.Log($"<color=yellow>[NetworkManager] 2. Received sector:joined -> Room: {joinedData.room}, StaticPlanets: {planetCount}ea</color>");
-                
-                // [TEST>
-                if (joinedData.staticPlanets != null)
-                {
-                    foreach (var p in joinedData.staticPlanets)
-                    {
-                        Debug.Log($"<color=white>[Planet Detail] ID: {p.planetId} / {p.planetName} ({p.planetType}) / Chunk: ({p.chunkIndex.x},{p.chunkIndex.y},{p.chunkIndex.z}) / Local: ({p.localPosition.x},{p.localPosition.y},{p.localPosition.z})</color>");
-                    }
-                }
-                // <TEST]
 
                 if (joinedData.staticPlanets != null)
                 {
@@ -224,7 +212,7 @@ public class NetworkManager : MonoBehaviour
     // 다중 섹터 구독 요청 (Client -> Server)
     public void EmitSubscribeGrid(List<Vector3Int> gridSectors)
     {
-        if (!IsConnected || gridSectors == null) return;
+        if (!IsConnected || gridSectors == null || gridSectors.Count == 0) return;
 
         List<Vector3IntData> sectorsToSubscribe = new List<Vector3IntData>(gridSectors.Count);
         foreach (var pos in gridSectors)
@@ -233,6 +221,21 @@ public class NetworkManager : MonoBehaviour
         }
 
         socket.EmitAsync("sector:subscribe_grid", sectorsToSubscribe);
+    }
+
+    // 다중 섹터 구독 해제 요청 (Client -> Server)
+    public void EmitUnsubscribeGrid(List<Vector3Int> gridSectors)
+    {
+        if (!IsConnected || gridSectors == null || gridSectors.Count == 0) return;
+
+        List<Vector3IntData> sectorsToUnsubscribe = new List<Vector3IntData>(gridSectors.Count);
+        foreach (var pos in gridSectors)
+        {
+            sectorsToUnsubscribe.Add(new Vector3IntData { x = pos.x, y = pos.y, z = pos.z });
+        }
+
+        // 백엔드에서 해당 이벤트명을 수신할 수 있도록 처리되어 있어야 합니다.
+        socket.EmitAsync("sector:unsubscribe_grid", sectorsToUnsubscribe);
     }
 
     // 내 행성 추적 요청 (Client -> Server)

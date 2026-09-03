@@ -5448,7 +5448,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CameraController
   currentMode: 0
-  orbitSpeed: 15
+  orbitSpeed: 10
   normalSpeed: 50
   boostMultiplier: 3
   mouseSensitivity: 2

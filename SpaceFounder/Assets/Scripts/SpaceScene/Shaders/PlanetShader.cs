@@ -54,7 +54,7 @@ public class PlanetShader : MonoBehaviour
         {
             string lowerType = planetType.ToLower();
             if (lowerType == "gaseous" || lowerType == "gas") typeInt = 1;
-            else if (lowerType == "icy" || lowerType == "ice") typeInt = 2;
+            else if (lowerType == "ice") typeInt = 2;
             else if (lowerType == "lava") typeInt = 3;
             else if (lowerType == "star") typeInt = 4;
         }

@@ -22,8 +22,7 @@ public class LoginManager : MonoBehaviour
     public TextMeshProUGUI errorText;
     public Button loginButton;
     public Button signupButton;
-
-    private const string ApiBaseUrl = "http://localhost:3000/api";
+    
     private const string NextSceneName = "SpaceScene"; 
 
     private void Start()
@@ -144,7 +143,7 @@ public class LoginManager : MonoBehaviour
 
     private IEnumerator VerifyToken(string token)
     {
-        using (UnityWebRequest request = UnityWebRequest.Get($"{ApiBaseUrl}/users/me"))
+        using (UnityWebRequest request = UnityWebRequest.Get($"{UserManager.Instance.ApiBaseUrl}/users/me"))
         {
             request.SetRequestHeader("Authorization", $"Bearer {token}");
 
@@ -179,7 +178,7 @@ public class LoginManager : MonoBehaviour
 
         string jsonBody = $"{{\"email\":\"{email}\", \"password\":\"{password}\"}}";
         
-        using (UnityWebRequest request = new UnityWebRequest($"{ApiBaseUrl}/users/login", "POST"))
+        using (UnityWebRequest request = new UnityWebRequest($"{UserManager.Instance.ApiBaseUrl}/users/login", "POST"))
         {
             byte[] bodyRaw = Encoding.UTF8.GetBytes(jsonBody);
             request.uploadHandler = new UploadHandlerRaw(bodyRaw);
@@ -195,7 +194,7 @@ public class LoginManager : MonoBehaviour
                 string token = response.token;
 
                 // 2. 획득한 토큰으로 유저 정보(me) 요청
-                using (UnityWebRequest meRequest = UnityWebRequest.Get($"{ApiBaseUrl}/users/me"))
+                using (UnityWebRequest meRequest = UnityWebRequest.Get($"{UserManager.Instance.ApiBaseUrl}/users/me"))
                 {
                     meRequest.SetRequestHeader("Authorization", $"Bearer {token}");
                     yield return meRequest.SendWebRequest();

@@ -19,6 +19,13 @@ public class UserManager : MonoBehaviour
     public string AuthToken { get; private set; }
     public bool IsLoggedIn => !string.IsNullOrEmpty(AuthToken);
 
+    [Header("Network Configuration")]
+    [SerializeField] private ServerConfig serverConfig;
+
+    // 다른 스크립트에서 주소를 꺼내갈 수 있도록 public으로 제공
+    //public string ApiBaseUrl => serverConfig.ApiBaseUrl;
+    public string ApiBaseUrl = "";
+
     // 다른 스크립트에서 로그인/로그아웃 이벤트를 구독할 수 있도록 추가
     public event Action<string> OnLoginSuccess;
     public event Action OnLogout;

@@ -8,7 +8,6 @@ public class WorldManager : MonoBehaviour
     public static WorldManager Instance { get; private set; }
 
     [Header("Prefabs & Scaling")]
-    // 프리팹 2종류로 분리
     [SerializeField] private GameObject userPlanetPrefab;
     [SerializeField] private GameObject staticPlanetPrefab;
     [SerializeField] private float scaleFactor = 0.01f;
@@ -24,6 +23,8 @@ public class WorldManager : MonoBehaviour
     private Dictionary<string, GameObject> activePlanets = new Dictionary<string, GameObject>();
     
     private ConcurrentQueue<DecodedPlanetSnapshot[]> updateQueue = new ConcurrentQueue<DecodedPlanetSnapshot[]>();
+
+    private HashSet<Vector3Int> activeSectors = new HashSet<Vector3Int>();
 
     private void Awake()
     {
@@ -56,25 +57,95 @@ public class WorldManager : MonoBehaviour
     public void UpdateCameraSector(Vector3Int newSector, bool forceUpdate = false)
     {
         if (!forceUpdate && CurrentCameraSector == newSector) return;
-
         CurrentCameraSector = newSector;
 
-        List<Vector3Int> gridSectors = new List<Vector3Int>();
-        for (int x = -1; x <= 1; x++)
+        HashSet<Vector3Int> newCoreSectors = new HashSet<Vector3Int>();   // 3x3x3 구독(요청) 구역
+        HashSet<Vector3Int> newBufferSectors = new HashSet<Vector3Int>(); // 5x5x5 유지(버퍼) 구역
+        
+        for (int x = -2; x <= 2; x++)
         {
-            for (int y = -1; y <= 1; y++)
+            for (int y = -2; y <= 2; y++)
             {
-                for (int z = -1; z <= 1; z++)
+                for (int z = -2; z <= 2; z++)
                 {
-                    gridSectors.Add(new Vector3Int(newSector.x + x, newSector.y + y, newSector.z + z));
+                    Vector3Int sec = new Vector3Int(newSector.x + x, newSector.y + y, newSector.z + z);
+                    
+                    // 5x5x5 버퍼 영역
+                    newBufferSectors.Add(sec);
+                    
+                    // 3x3x3 코어 영역
+                    if (Mathf.Abs(x) <= 1 && Mathf.Abs(y) <= 1 && Mathf.Abs(z) <= 1)
+                    {
+                        newCoreSectors.Add(sec);
+                    }
                 }
             }
         }
 
+        List<Vector3Int> sectorsToSubscribe = new List<Vector3Int>();
+        List<Vector3Int> sectorsToUnsubscribe = new List<Vector3Int>();
+
+        // 1. 구독 해제 (버리는 로직): 기존에 활성화된 섹터 중, 5x5x5 버퍼를 '완전히 벗어난' 섹터
+        foreach (var sector in activeSectors)
+        {
+            if (!newBufferSectors.Contains(sector))
+            {
+                sectorsToUnsubscribe.Add(sector);
+            }
+        }
+
+        // 2. 새로 구독: 3x3x3 코어 영역에 새로 들어온 섹터
+        foreach (var sector in newCoreSectors)
+        {
+            if (!activeSectors.Contains(sector))
+            {
+                sectorsToSubscribe.Add(sector);
+            }
+        }
+
+        // activeSectors 리스트 갱신
+        foreach (var sector in sectorsToUnsubscribe) activeSectors.Remove(sector);
+        foreach (var sector in sectorsToSubscribe) activeSectors.Add(sector);
+
+        // 3. 완전히 멀어진 섹터의 정적 행성들을 씬(메모리)에서 파괴
+        UnloadSectors(sectorsToUnsubscribe);
+
         if (NetworkManager.Instance != null)
         {
-            NetworkManager.Instance.EmitSubscribeGrid(gridSectors);
+            NetworkManager.Instance.EmitSubscribeGrid(sectorsToSubscribe);
+            NetworkManager.Instance.EmitUnsubscribeGrid(sectorsToUnsubscribe);
         }
+    }
+
+    // 버퍼 존을 벗어난 섹터의 정적 천체 메모리 해제
+    private void UnloadSectors(List<Vector3Int> sectorsToClear)
+    {
+        if (sectorsToClear == null || sectorsToClear.Count == 0) return;
+
+        HashSet<Vector3Int> clearSet = new HashSet<Vector3Int>(sectorsToClear);
+        List<string> keysToRemove = new List<string>();
+
+        // staticDataMap을 순회하며 삭제할 섹터에 속한 정적 행성을 찾음
+        foreach (var kvp in staticDataMap)
+        {
+            if (clearSet.Contains(kvp.Value.chunkIndex.ToVector3Int()))
+            {
+                keysToRemove.Add(kvp.Key);
+            }
+        }
+
+        // 찾은 행성들을 씬에서 파괴하고 딕셔너리에서 제거
+        foreach (var key in keysToRemove)
+        {
+            if (activePlanets.TryGetValue(key, out GameObject obj))
+            {
+                Destroy(obj); 
+                activePlanets.Remove(key);
+            }
+            staticDataMap.Remove(key);
+        }
+        
+        Debug.Log($"[WorldManager] Unloaded {sectorsToClear.Count} sectors and destroyed {keysToRemove.Count} static planets.");
     }
 
     public void RequestMyPlanetLocation(Action<Vector3Int, Vector3> onLocationReceived)
@@ -106,7 +177,6 @@ public class WorldManager : MonoBehaviour
                 Vector3 scaledLocalPos = sp.localPosition.ToVector3() * scaleFactor;
                 Vector3 absolutePosition = CalculateAbsolutePosition(sp.chunkIndex.ToVector3Int(), scaledLocalPos);
 
-                // 정적 행성이므로 staticPlanetPrefab 사용
                 GameObject newPlanet = Instantiate(staticPlanetPrefab, absolutePosition, Quaternion.identity);
                 
                 newPlanet.transform.localScale = GetPlanetScale(sp.planetType, sp.planetId);
@@ -170,7 +240,6 @@ public class WorldManager : MonoBehaviour
             {
                 Vector3 absolutePosition = CalculateAbsolutePosition(pData.sectorIndex, scaledLocalPos);
                 
-                // 타입에 따라 생성할 프리팹 결정
                 GameObject prefabToInstantiate = isDefault ? staticPlanetPrefab : userPlanetPrefab;
                 GameObject newPlanet = Instantiate(prefabToInstantiate, absolutePosition, Quaternion.identity);
 
@@ -193,7 +262,6 @@ public class WorldManager : MonoBehaviour
                     newPlanet.name = uniqueKey;
                 }
 
-                // 정적 여부를 isDefault 값으로 판단하여 컨트롤러에 전달
                 if (controller != null)
                 {
                     controller.SetPlanetData(staticData.planetName, staticData.username, staticData.planetType, isDefault);
@@ -262,7 +330,6 @@ public class WorldManager : MonoBehaviour
             case "gaseous":
             case "gas":
                 return Vector3.one * 8f * randomVariance; 
-            case "icy":
             case "ice":
                 return Vector3.one * 1.5f * randomVariance; 
             case "rocky":
@@ -299,14 +366,12 @@ public class WorldManager : MonoBehaviour
 
             PlanetController controller = planetObj.GetComponent<PlanetController>();
 
-            // 트레일 렌더러가 있는 유저 행성은 컨트롤러 내부에서 렌더러 배열 수정 후 이동을 처리
             if (controller != null)
             {
                 controller.ApplyWorldShift(shiftAmount);
             }
             else
             {
-                // 컨트롤러가 없는 단순 배경/정적 오브젝트는 여기서 직접 이동
                 planetObj.transform.position -= shiftAmount;
             }
         }

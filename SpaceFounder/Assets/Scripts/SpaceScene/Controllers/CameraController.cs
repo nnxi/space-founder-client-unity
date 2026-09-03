@@ -15,7 +15,7 @@ public class CameraController : MonoBehaviour
     public CameraMode currentMode = CameraMode.Follow;
     public bool HasFocusedOnMyPlanet => hasFocusedOnMyPlanet;
 
-    [SerializeField] private float orbitSpeed = 15f;
+    [SerializeField] private float orbitSpeed = 10f;
 
     [Header("Speed Settings")]
     [SerializeField] private float normalSpeed = 50f;

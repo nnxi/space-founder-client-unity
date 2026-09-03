@@ -10,7 +10,6 @@ public class PlanetCreationManager : MonoBehaviour
 {
     [Header("3D Planet Target")]
     public Transform planetTransform;
-    public Renderer planetRenderer;
 
     [Header("UI References")]
     public TextMeshProUGUI typeText;
@@ -21,26 +20,22 @@ public class PlanetCreationManager : MonoBehaviour
     public Button launchButton;
     public TextMeshProUGUI errorText;
 
-    private const string ApiBaseUrl = "http://localhost:3000/api";
-    private const string ShaderName = "Custom/ProceduralPlanet";
     
-    private static Shader cachedShader;
-    private MaterialPropertyBlock propBlock;
+    private RandomPlanetGenerator planetGenerator;
     
     private string currentPlanetType;
     private string currentColorHex;
     private int currentNumericId;
 
-    private void Awake()
-    {
-        // 런타임 메모리 할당 최소화를 위해 Awake에서 한 번만 초기화
-        propBlock = new MaterialPropertyBlock();
-    }
-
     private void Start()
     {
+        if (planetTransform != null)
+        {
+            planetGenerator = planetTransform.GetComponent<RandomPlanetGenerator>();
+        }
+
         if (generateRandomButton != null)
-            generateRandomButton.onClick.AddListener(GenerateRandomPlanet);
+            generateRandomButton.onClick.AddListener(GenerateNewPlanet);
 
         if (launchButton != null)
             launchButton.onClick.AddListener(OnLaunchClicked);
@@ -48,7 +43,7 @@ public class PlanetCreationManager : MonoBehaviour
         if (planetNameInput != null)
             planetNameInput.onValueChanged.AddListener(ValidateInput);
 
-        GenerateRandomPlanet();
+        GenerateNewPlanet();
         ValidateInput(planetNameInput.text);
     }
 
@@ -66,7 +61,7 @@ public class PlanetCreationManager : MonoBehaviour
 
     private void OnDestroy()
     {
-        if (generateRandomButton != null) generateRandomButton.onClick.RemoveListener(GenerateRandomPlanet);
+        if (generateRandomButton != null) generateRandomButton.onClick.RemoveListener(GenerateNewPlanet);
         if (launchButton != null) launchButton.onClick.RemoveListener(OnLaunchClicked);
         if (planetNameInput != null) planetNameInput.onValueChanged.RemoveListener(ValidateInput);
     }
@@ -79,18 +74,18 @@ public class PlanetCreationManager : MonoBehaviour
         }
     }
 
-    private void GenerateRandomPlanet()
+    private void GenerateNewPlanet()
     {
-        string[] types = { "rocky", "gaseous", "icy" };
-        currentPlanetType = types[Random.Range(0, types.Length)];
-        
-        Color randomColor = Random.ColorHSV(0f, 1f, 0.4f, 1f, 0.5f, 1f);
-        currentColorHex = "#" + ColorUtility.ToHtmlStringRGB(randomColor);
-        
-        currentNumericId = Random.Range(1, 100000);
+        if (planetGenerator == null) return;
+
+        planetGenerator.GenerateRandomPlanet();
+
+        currentPlanetType = planetGenerator.CurrentType;
+        currentColorHex = planetGenerator.CurrentColorHex;
+        currentNumericId = planetGenerator.CurrentId;
 
         UpdateUI();
-        UpdatePlanetVisuals();
+        UpdatePlanetScale();
     }
 
     private void UpdateUI()
@@ -107,46 +102,18 @@ public class PlanetCreationManager : MonoBehaviour
         }
     }
 
-    private void UpdatePlanetVisuals()
+    private void UpdatePlanetScale()
     {
-        if (planetTransform == null || planetRenderer == null) return;
+        if (planetTransform == null) return;
 
-        // 크기 계산
         float randomFactor = Mathf.Repeat(currentNumericId * 137.54f, 1.0f);
         float scaleMultiplier = 1.0f;
 
         if (currentPlanetType == "gaseous") scaleMultiplier = 1.5f + (randomFactor * 1.5f);
-        else if (currentPlanetType == "icy") scaleMultiplier = 0.9f + (randomFactor * 0.6f);
-        else scaleMultiplier = 0.7f + (randomFactor * 0.6f);
+        else if (currentPlanetType == "ice") scaleMultiplier = 0.9f + (randomFactor * 0.6f);
+        else scaleMultiplier = 0.7f + (randomFactor * 0.6f); 
 
         planetTransform.localScale = new Vector3(scaleMultiplier, scaleMultiplier, scaleMultiplier);
-
-        // 셰이더 캐싱 및 공유 매터리얼 할당
-        if (cachedShader == null)
-        {
-            cachedShader = Shader.Find(ShaderName);
-        }
-
-        if (planetRenderer.sharedMaterial == null || planetRenderer.sharedMaterial.shader != cachedShader)
-        {
-            planetRenderer.sharedMaterial = new Material(cachedShader);
-        }
-
-        // 셰이더 프로퍼티 블록 적용
-        planetRenderer.GetPropertyBlock(propBlock);
-
-        if (ColorUtility.TryParseHtmlString(currentColorHex, out Color baseColor))
-        {
-            propBlock.SetColor("_BaseColor", baseColor);
-        }
-
-        float seedValue = currentNumericId * 137.54f;
-        propBlock.SetFloat("_Seed", seedValue);
-
-        int typeInt = currentPlanetType == "rocky" ? 0 : (currentPlanetType == "gaseous" ? 1 : 2);
-        propBlock.SetInt("_PlanetType", typeInt);
-
-        planetRenderer.SetPropertyBlock(propBlock);
     }
 
     private void OnLaunchClicked()
@@ -179,7 +146,7 @@ public class PlanetCreationManager : MonoBehaviour
 
         string jsonBody = JsonUtility.ToJson(payload);
 
-        using (UnityWebRequest request = new UnityWebRequest($"{ApiBaseUrl}/planets", "POST"))
+        using (UnityWebRequest request = new UnityWebRequest($"{UserManager.Instance.ApiBaseUrl}/planets", "POST"))
         {
             byte[] bodyRaw = Encoding.UTF8.GetBytes(jsonBody);
             request.uploadHandler = new UploadHandlerRaw(bodyRaw);
@@ -197,7 +164,27 @@ public class PlanetCreationManager : MonoBehaviour
             {
                 if (errorText != null)
                 {
-                    errorText.text = "Creation Failed: " + request.error;
+                    string responseText = request.downloadHandler.text;
+                    string displayError = "Creation Failed: " + request.error;
+
+                    if (!string.IsNullOrEmpty(responseText))
+                    {
+                        try
+                        {
+                            // 백엔드 JSON 응답 파싱
+                            ErrorResponse backendError = JsonUtility.FromJson<ErrorResponse>(responseText);
+                            if (backendError != null && !string.IsNullOrEmpty(backendError.error))
+                            {
+                                displayError = backendError.error;
+                            }
+                        }
+                        catch
+                        {
+                            // 파싱 실패 시 기본 에러 유지
+                        }
+                    }
+                    
+                    errorText.text = displayError;
                 }
                 launchButton.interactable = true;
             }
@@ -205,6 +192,7 @@ public class PlanetCreationManager : MonoBehaviour
     }
 }
 
+// 이전에 중복 선언 문제가 있었다면 이 부분을 삭제하고 사용하세요.
 [System.Serializable]
 public class PlanetCreatePayload
 {

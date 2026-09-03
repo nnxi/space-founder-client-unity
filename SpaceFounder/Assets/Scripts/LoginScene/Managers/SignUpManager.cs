@@ -24,7 +24,6 @@ public class SignUpManager : MonoBehaviour
     public GameObject loginPanel;
     public GameObject signUpPanel;
 
-    private const string ApiBaseUrl = "http://localhost:3000/api";
 
     private void Start()
     {
@@ -159,9 +158,10 @@ public class SignUpManager : MonoBehaviour
         signUpButton.interactable = false;
         backendErrorText.text = "";
 
+        // JSON 페이로드 생성
         string jsonBody = $"{{\"email\":\"{email}\", \"password\":\"{password}\", \"username\":\"{username}\"}}";
         
-        using (UnityWebRequest request = new UnityWebRequest($"{ApiBaseUrl}/users/signup", "POST"))
+        using (UnityWebRequest request = new UnityWebRequest($"{UserManager.Instance.ApiBaseUrl}/users/signup", "POST"))
         {
             byte[] bodyRaw = Encoding.UTF8.GetBytes(jsonBody);
             request.uploadHandler = new UploadHandlerRaw(bodyRaw);
@@ -172,6 +172,7 @@ public class SignUpManager : MonoBehaviour
 
             if (request.result == UnityWebRequest.Result.Success)
             {
+                // 성공 시 입력 필드 초기화 및 패널 전환
                 usernameInput.text = "";
                 emailInput.text = "";
                 passwordInput.text = "";
@@ -182,16 +183,31 @@ public class SignUpManager : MonoBehaviour
             }
             else
             {
-                // 백엔드에서 반환하는 JSON 형태의 에러 메시지 파싱
-                try
+                // 백엔드 에러 응답 파싱 및 UI 출력
+                string responseText = request.downloadHandler.text;
+                
+                if (!string.IsNullOrEmpty(responseText))
                 {
-                    ErrorResponse errorResponse = JsonUtility.FromJson<ErrorResponse>(request.downloadHandler.text);
-                    backendErrorText.text = !string.IsNullOrEmpty(errorResponse.error) ? errorResponse.error : "Registration failed.";
+                    try
+                    {
+                        ErrorResponse errorResponse = JsonUtility.FromJson<ErrorResponse>(responseText);
+                        if (errorResponse != null && !string.IsNullOrEmpty(errorResponse.error))
+                        {
+                            backendErrorText.text = errorResponse.error;
+                        }
+                        else
+                        {
+                            backendErrorText.text = "Registration failed: " + request.error;
+                        }
+                    }
+                    catch
+                    {
+                        backendErrorText.text = "Registration failed. Server error.";
+                    }
                 }
-                catch
+                else
                 {
-                    // JSON 파싱 실패 시 기본 에러 출력 (예: 500 내부 서버 오류)
-                    backendErrorText.text = "Registration failed. Server error.";
+                    backendErrorText.text = "Registration failed: " + request.error;
                 }
                 
                 signUpButton.interactable = true;
