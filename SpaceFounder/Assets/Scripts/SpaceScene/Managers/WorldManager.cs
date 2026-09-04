@@ -85,7 +85,7 @@ public class WorldManager : MonoBehaviour
         List<Vector3Int> sectorsToSubscribe = new List<Vector3Int>();
         List<Vector3Int> sectorsToUnsubscribe = new List<Vector3Int>();
 
-        // 1. 구독 해제 (버리는 로직): 기존에 활성화된 섹터 중, 5x5x5 버퍼를 '완전히 벗어난' 섹터
+        // 1. 구독 해제: 기존 활성화된 섹터 중 5x5x5 버퍼를 완전히 벗어난 섹터
         foreach (var sector in activeSectors)
         {
             if (!newBufferSectors.Contains(sector))
@@ -107,7 +107,7 @@ public class WorldManager : MonoBehaviour
         foreach (var sector in sectorsToUnsubscribe) activeSectors.Remove(sector);
         foreach (var sector in sectorsToSubscribe) activeSectors.Add(sector);
 
-        // 3. 완전히 멀어진 섹터의 정적 행성들을 씬(메모리)에서 파괴
+        // 3. 완전히 멀어진 섹터의 정적 행성들을 씬에서 파괴
         UnloadSectors(sectorsToUnsubscribe);
 
         if (NetworkManager.Instance != null)
@@ -125,16 +125,22 @@ public class WorldManager : MonoBehaviour
         HashSet<Vector3Int> clearSet = new HashSet<Vector3Int>(sectorsToClear);
         List<string> keysToRemove = new List<string>();
 
-        // staticDataMap을 순회하며 삭제할 섹터에 속한 정적 행성을 찾음
+        // 삭제할 섹터에 속한 정적 행성 탐색
         foreach (var kvp in staticDataMap)
         {
             if (clearSet.Contains(kvp.Value.chunkIndex.ToVector3Int()))
             {
+                // 내 행성은 삭제 대상에서 제외
+                if (NetworkManager.Instance != null && kvp.Value.planetId == NetworkManager.Instance.MyPlanetId)
+                {
+                    continue;
+                }
+                
                 keysToRemove.Add(kvp.Key);
             }
         }
 
-        // 찾은 행성들을 씬에서 파괴하고 딕셔너리에서 제거
+        // 씬에서 파괴 및 딕셔너리에서 제거
         foreach (var key in keysToRemove)
         {
             if (activePlanets.TryGetValue(key, out GameObject obj))
@@ -223,7 +229,8 @@ public class WorldManager : MonoBehaviour
             Vector3 scaledLocalPos = pData.localPosition * scaleFactor;
             Vector3 scaledVelocity = pData.velocity * scaleFactor;
 
-            if (activePlanets.TryGetValue(uniqueKey, out GameObject planetObj))
+            // [수정 핵심 1] 딕셔너리에 키가 있는지 뿐만 아니라, 씬에 오브젝트가 살아있는지(planetObj != null) 확실히 체크
+            if (activePlanets.TryGetValue(uniqueKey, out GameObject planetObj) && planetObj != null)
             {
                 PlanetController controller = planetObj.GetComponent<PlanetController>();
                 if (controller != null)
@@ -238,6 +245,17 @@ public class WorldManager : MonoBehaviour
             }
             else
             {
+                // [수정 핵심 2] 딕셔너리에는 없지만 MyPlanet 레퍼런스는 씬에 살아있는 엣지 케이스 방어 (복수 생성 원천 차단)
+                if (!isDefault && actualId == MyPlanetId && MyPlanet != null)
+                {
+                    activePlanets[uniqueKey] = MyPlanet; 
+                    
+                    PlanetController myController = MyPlanet.GetComponent<PlanetController>();
+                    if (myController != null) myController.UpdateSnapshot(pData.sectorIndex, scaledLocalPos, scaledVelocity, CurrentCameraSector);
+                    continue; 
+                }
+
+                // 정상적인 신규 생성 로직
                 Vector3 absolutePosition = CalculateAbsolutePosition(pData.sectorIndex, scaledLocalPos);
                 
                 GameObject prefabToInstantiate = isDefault ? staticPlanetPrefab : userPlanetPrefab;
@@ -267,7 +285,8 @@ public class WorldManager : MonoBehaviour
                     controller.SetPlanetData(staticData.planetName, staticData.username, staticData.planetType, isDefault);
                 }
 
-                activePlanets.Add(uniqueKey, newPlanet);
+                // [수정 핵심 3] Add() 대신 인덱서(=) 사용. 파괴된 참조 찌꺼기가 남아있을 때 ArgumentException 발생을 방지
+                activePlanets[uniqueKey] = newPlanet;
 
                 if (!isDefault && actualId == MyPlanetId)
                 {
@@ -290,9 +309,18 @@ public class WorldManager : MonoBehaviour
             {
                 if (!currentFrameKeys.Contains(key))
                 {
-                    if (key == myPlanetKey) continue;
+                    if (key == myPlanetKey) 
+                    {
+                        // [수정 핵심 4] 무조건 건너뛰는 게 아니라, 내 행성이 진짜로 파괴(Null)되었다면 딕셔너리에서도 완전히 지워주어 다음 프레임에 정상 생성되도록 유도
+                        if (MyPlanet == null) toRemove.Add(key);
+                        continue; 
+                    }
 
-                    Destroy(activePlanets[key]);
+                    // 이미 파괴된 오브젝트에 Destroy를 호출하지 않도록 안전 장치 추가
+                    if (activePlanets[key] != null)
+                    {
+                        Destroy(activePlanets[key]);
+                    }
                     toRemove.Add(key);
                 }
             }

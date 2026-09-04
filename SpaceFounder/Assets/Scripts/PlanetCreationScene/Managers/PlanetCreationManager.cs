@@ -133,7 +133,7 @@ public class PlanetCreationManager : MonoBehaviour
         // NetworkManager가 존재하는 경우에만 연결 해제 및 파괴 수행
         if (NetworkManager.Instance != null)
         {
-            NetworkManager.Instance.OnApplicationQuit();
+            NetworkManager.Instance.Disconnect();
             Destroy(NetworkManager.Instance.gameObject);
         }
 

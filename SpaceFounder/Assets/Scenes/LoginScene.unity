@@ -3383,7 +3383,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 02418321c7e154f469adda03d4280fa2, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::UserManager
-  serverConfig: {fileID: 11400000, guid: 09fef39e0738c45f5881b967074ea41a, type: 2}
+  serverConfig: {fileID: 11400000, guid: c500482bea07c4ca4a64dcbf6e8f1b78, type: 2}
 --- !u!1 &911256179
 GameObject:
   m_ObjectHideFlags: 0
