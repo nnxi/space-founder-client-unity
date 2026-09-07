@@ -6,7 +6,7 @@
 Space Founder는 웹 브라우저에서 곧바로 즐길 수 있는 **실시간 대규모 우주 탐험 시뮬레이션**입니다. 
 자신만의 행성을 개척하고, 끝없는 우주를 유영하며 다른 탐험가들의 행성을 발견해 보세요. 우주의 크기는 무한하며, 여러분의 발길이 닿는 모든 곳이 곧 새로운 세계가 됩니다.
 
-[![Play Now](https://img.shields.io/badge/🚀_Play_Now-Launch_Game-blueviolet?style=for-the-badge)](https://space-founder.onrender.com/)
+> **Now Available!** 브라우저에서 바로 우주를 탐험해 보세요: [👉 Space Founder 플레이하기](https://space-founder.onrender.com/)
 
 ---
 
