@@ -23,7 +23,7 @@ Space Founder는 웹 브라우저에서 곧바로 즐길 수 있는 **실시간 
 쾌적한 브라우저 환경에서 압도적인 스케일의 우주를 구현하기 위해 아래의 기술 스택을 사용했습니다.
 
 * **Client:** Unity 3D (WebGL)
-* **Server:** Node.js (Bare-metal), Socket.IO
+* **Server:** Node.js, Socket.IO
 * **Database & Auth:** Supabase
 
 ---
