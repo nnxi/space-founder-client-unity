@@ -21,9 +21,7 @@ public class LoginManager : MonoBehaviour
     public TMP_InputField passwordInput;
     public TextMeshProUGUI errorText;
     public Button loginButton;
-    public Button signupButton;
     
-    private const string NextSceneName = "SpaceScene"; 
 
     private void Start()
     {
@@ -176,7 +174,7 @@ public class LoginManager : MonoBehaviour
     {
         errorText.text = "";
 
-        string jsonBody = $"{{\"email\":\"{email}\", \"password\":\"{password}\"}}";
+        string jsonBody = JsonUtility.ToJson(new LoginRequest { email = email, password = password });
         
         using (UnityWebRequest request = new UnityWebRequest($"{UserManager.Instance.ApiBaseUrl}/users/login", "POST"))
         {
@@ -228,6 +226,13 @@ public class LoginManager : MonoBehaviour
             }
         }
     }
+}
+
+[System.Serializable]
+public class LoginRequest
+{
+    public string email;
+    public string password;
 }
 
 [System.Serializable]

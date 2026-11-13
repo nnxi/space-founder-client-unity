@@ -159,7 +159,7 @@ public class SignUpManager : MonoBehaviour
         backendErrorText.text = "";
 
         // JSON 페이로드 생성
-        string jsonBody = $"{{\"email\":\"{email}\", \"password\":\"{password}\", \"username\":\"{username}\"}}";
+        string jsonBody = JsonUtility.ToJson(new SignUpRequest { email = email, password = password, username = username });
         
         using (UnityWebRequest request = new UnityWebRequest($"{UserManager.Instance.ApiBaseUrl}/users/signup", "POST"))
         {
@@ -214,6 +214,14 @@ public class SignUpManager : MonoBehaviour
             }
         }
     }
+}
+
+[System.Serializable]
+public class SignUpRequest
+{
+    public string email;
+    public string password;
+    public string username;
 }
 
 // 에러 메시지 파싱을 위한 클래스

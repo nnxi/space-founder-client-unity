@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using System;
 
 [System.Serializable]
@@ -71,5 +72,19 @@ public class UserManager : MonoBehaviour
 
         // 로그아웃 이벤트 발생
         OnLogout?.Invoke();
+    }
+
+    // 소켓 연결 해제 → 유저 데이터 삭제 → 로그인 씬 이동 (기존 중복 로그아웃 로직 통합)
+    public void Logout(string loginSceneName = "LoginScene")
+    {
+        if (NetworkManager.Instance != null)
+        {
+            NetworkManager.Instance.Disconnect();
+            // 다음 로그인 시 깔끔하게 재생성되도록 파괴
+            Destroy(NetworkManager.Instance.gameObject);
+        }
+
+        ClearUserData();
+        SceneManager.LoadScene(loginSceneName);
     }
 }

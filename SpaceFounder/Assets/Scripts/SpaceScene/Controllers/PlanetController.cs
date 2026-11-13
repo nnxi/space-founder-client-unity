@@ -174,17 +174,6 @@ public class PlanetController : MonoBehaviour
         }
     }
 
-    public void AddSatellite(Transform satTransform, float radius, float speed, float inclination)
-    {
-        satellites.Add(new SatelliteData
-        {
-            satelliteTransform = satTransform,
-            radius = radius,
-            speed = speed,
-            inclination = inclination
-        });
-    }
-
     private void OnMouseEnter()
     {
         PlanetInfoUIManager.Instance?.ShowPlanetInfo(planetName, ownerName, planetType, isStaticPlanet);

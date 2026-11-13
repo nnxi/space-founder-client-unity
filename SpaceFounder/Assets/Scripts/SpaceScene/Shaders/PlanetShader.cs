@@ -19,7 +19,6 @@ public class PlanetShader : MonoBehaviour
     // 활성화된 모든 항성을 추적
     public static HashSet<PlanetShader> ActiveStars = new HashSet<PlanetShader>();
     private bool isStar = false;
-    private Vector3 currentLightDir = new Vector3(1, 1, 0.5f);
 
     private void Awake()
     {

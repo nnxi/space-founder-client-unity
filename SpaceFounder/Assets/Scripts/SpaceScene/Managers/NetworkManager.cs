@@ -289,13 +289,18 @@ public class NetworkManager : MonoBehaviour
     {
         try
         {
-            byte[] rawPayload = Convert.FromBase64String(base64String);
-            DecodedWorldUpdatePacket packet = WorldPacketDecoder.Decode(rawPayload);
-
-            if (WorldManager.Instance != null)
-                WorldManager.Instance.OnWorldUpdateReceived(packet.planets);
+            HandleWorldUpdate(Convert.FromBase64String(base64String));
         }
         catch (Exception ex) { Debug.LogError($"[NetworkManager] world:update parse error: {ex.Message}"); }
+    }
+
+    // WebGL(Base64)과 에디터(byte[]) 공통 처리부
+    private void HandleWorldUpdate(byte[] rawPayload)
+    {
+        DecodedWorldUpdatePacket packet = WorldPacketDecoder.Decode(rawPayload);
+
+        if (WorldManager.Instance != null)
+            WorldManager.Instance.OnWorldUpdateReceived(packet.planets);
     }
 
     public void OnCameraTrackMeResponse(string jsonStr)
@@ -340,7 +345,12 @@ public class NetworkManager : MonoBehaviour
         socket.On("world:update", res =>
         {
             byte[] rawPayload = res.GetValue<byte[]>();
-            UnityMainThreadDispatcher.Instance().Enqueue(() => OnWorldUpdateReceived(Convert.ToBase64String(rawPayload)));
+            UnityMainThreadDispatcher.Instance().Enqueue(() =>
+            {
+                // 기존 OnWorldUpdateReceived와 동일하게 파싱 예외를 로그로 처리
+                try { HandleWorldUpdate(rawPayload); }
+                catch (Exception ex) { Debug.LogError($"[NetworkManager] world:update parse error: {ex.Message}"); }
+            });
         });
     }
 #endif

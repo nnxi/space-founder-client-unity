@@ -17,10 +17,10 @@ public class WorldManager : MonoBehaviour
     public Vector3Int CurrentCameraSector { get; private set; } = new Vector3Int(int.MinValue, int.MinValue, int.MinValue);
     public GameObject MyPlanet { get; private set; }
 
-    public Vector3Int BaseSector { get; private set; }
-
     private Dictionary<string, StaticPlanetData> staticDataMap = new Dictionary<string, StaticPlanetData>();
     private Dictionary<string, GameObject> activePlanets = new Dictionary<string, GameObject>();
+    // activePlanets와 키를 맞춰 유지하는 PlanetController 캐시 (GetComponent 반복 호출 방지)
+    private Dictionary<string, PlanetController> planetControllers = new Dictionary<string, PlanetController>();
     
     private ConcurrentQueue<DecodedPlanetSnapshot[]> updateQueue = new ConcurrentQueue<DecodedPlanetSnapshot[]>();
 
@@ -49,7 +49,6 @@ public class WorldManager : MonoBehaviour
     public void InitializePlayer(int planetId, Vector3Int initialSector)
     {
         MyPlanetId = planetId;
-        BaseSector = initialSector;
         UpdateCameraSector(initialSector, true);
         Debug.Log($"[WorldManager] Player init - ID: {MyPlanetId}, Sector: {initialSector}");
     }
@@ -148,6 +147,7 @@ public class WorldManager : MonoBehaviour
                 Destroy(obj); 
                 activePlanets.Remove(key);
             }
+            planetControllers.Remove(key);
             staticDataMap.Remove(key);
         }
         
@@ -193,6 +193,7 @@ public class WorldManager : MonoBehaviour
                 {
                     controller.UpdateSnapshot(sp.chunkIndex.ToVector3Int(), scaledLocalPos, Vector3.zero, CurrentCameraSector);
                     controller.SetPlanetData(sp.planetName, sp.username, sp.planetType, true);
+                    planetControllers[key] = controller;
                 }
 
                 PlanetShader shaderComp = newPlanet.GetComponent<PlanetShader>();
@@ -232,7 +233,7 @@ public class WorldManager : MonoBehaviour
             // [수정 핵심 1] 딕셔너리에 키가 있는지 뿐만 아니라, 씬에 오브젝트가 살아있는지(planetObj != null) 확실히 체크
             if (activePlanets.TryGetValue(uniqueKey, out GameObject planetObj) && planetObj != null)
             {
-                PlanetController controller = planetObj.GetComponent<PlanetController>();
+                planetControllers.TryGetValue(uniqueKey, out PlanetController controller);
                 if (controller != null)
                 {
                     controller.UpdateSnapshot(pData.sectorIndex, scaledLocalPos, scaledVelocity, CurrentCameraSector);
@@ -251,7 +252,11 @@ public class WorldManager : MonoBehaviour
                     activePlanets[uniqueKey] = MyPlanet; 
                     
                     PlanetController myController = MyPlanet.GetComponent<PlanetController>();
-                    if (myController != null) myController.UpdateSnapshot(pData.sectorIndex, scaledLocalPos, scaledVelocity, CurrentCameraSector);
+                    if (myController != null)
+                    {
+                        planetControllers[uniqueKey] = myController;
+                        myController.UpdateSnapshot(pData.sectorIndex, scaledLocalPos, scaledVelocity, CurrentCameraSector);
+                    }
                     continue; 
                 }
 
@@ -264,7 +269,12 @@ public class WorldManager : MonoBehaviour
                 PlanetController controller = newPlanet.GetComponent<PlanetController>();
                 if (controller != null)
                 {
+                    planetControllers[uniqueKey] = controller;
                     controller.UpdateSnapshot(pData.sectorIndex, scaledLocalPos, scaledVelocity, CurrentCameraSector);
+                }
+                else
+                {
+                    planetControllers.Remove(uniqueKey);
                 }
 
                 if (hasStaticData)
@@ -329,6 +339,7 @@ public class WorldManager : MonoBehaviour
         foreach (var key in toRemove)
         {
             activePlanets.Remove(key);
+            planetControllers.Remove(key);
         }
     }
 
@@ -366,33 +377,14 @@ public class WorldManager : MonoBehaviour
         }
     }
 
-    public PlanetController GetPlanetController(int planetId, string userType = "user")
-    {
-        string key = $"{userType}_{planetId}";
-        if (activePlanets.TryGetValue(key, out GameObject planetObj))
-        {
-            return planetObj.GetComponent<PlanetController>();
-        }
-        return null;
-    }
-
-    public GameObject GetPlanet(int planetId, string userType = "user")
-    {
-        string key = $"{userType}_{planetId}";
-        if (activePlanets.TryGetValue(key, out GameObject planetObj))
-        {
-            return planetObj;
-        }
-        return null;
-    }
-
     public void ShiftAllPlanets(Vector3 shiftAmount)
     {
-        foreach (var planetObj in activePlanets.Values)
+        foreach (var kvp in activePlanets)
         {
+            GameObject planetObj = kvp.Value;
             if (planetObj == null) continue;
 
-            PlanetController controller = planetObj.GetComponent<PlanetController>();
+            planetControllers.TryGetValue(kvp.Key, out PlanetController controller);
 
             if (controller != null)
             {
