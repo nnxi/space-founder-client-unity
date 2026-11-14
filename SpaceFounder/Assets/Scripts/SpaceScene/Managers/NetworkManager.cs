@@ -131,10 +131,18 @@ public class NetworkManager : MonoBehaviour
 
         JS_ConnectSocketIO(socketUrl, token);
 #else
+        /*
         // 유니티 에디터 환경 (로컬 테스트용 폴백)
         if (string.IsNullOrEmpty(socketUrl) || socketUrl.Contains("onrender.com"))
         {
             socketUrl = "http://localhost:3000";
+        }
+        */
+
+        // 유니티 에디터 환경에서도 Render 프로덕션 서버로 연결
+        if (string.IsNullOrEmpty(socketUrl))
+        {
+            socketUrl = "https://space-founder.onrender.com";
         }
 
         var options = new SocketIOOptions
