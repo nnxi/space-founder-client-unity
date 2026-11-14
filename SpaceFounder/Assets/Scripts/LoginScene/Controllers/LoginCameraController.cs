@@ -38,7 +38,8 @@ public class LoginCameraController : MonoBehaviour
         currentRotationY = targetRotationY;
     }
 
-    private void Update()
+    // 타겟 이동(Update) 이후 카메라를 갱신하여 지터 방지
+    private void LateUpdate()
     {
         if (targetPlanet == null) return;
 

@@ -24,6 +24,11 @@ public class PlanetController : MonoBehaviour
     // 가비지 컬렉션(GC)을 막기 위해 넉넉한 크기의 충돌체 배열을 미리 한 번만 할당
     private Collider[] hitColliders = new Collider[10];
 
+    // 넓은 반경 사전 검사 주기. 주변에 행성이 없으면 매 프레임 정밀 검사를 생략
+    [SerializeField] private float collisionBroadphaseInterval = 0.25f;
+    private float nextBroadphaseTime = 0f; // 0이면 다음 Update에서 즉시 사전 검사
+    private bool hasNearbyPlanet = true;
+
     [System.Serializable]
     public class SatelliteData
     {
@@ -64,6 +69,7 @@ public class PlanetController : MonoBehaviour
             networkVelocity = serverVel;
             visualVelocity = Vector3.zero;
             isInitialized = true;
+            nextBroadphaseTime = 0f; // 순간이동(스냅) 후에는 주변 상황이 바뀌었으므로 즉시 재검사
 
             return;
         }
@@ -95,9 +101,22 @@ public class PlanetController : MonoBehaviour
 
             // 2. 클라이언트 방어막: GC가 발생하지 않는 NonAlloc 방식 사용 및 레이어 필터링 적용
             float myRadius = transform.localScale.x * 0.5f;
-            
-            // 미리 만들어둔 hitColliders 배열에 충돌한 오브젝트 정보만 채워넣고, 부딪힌 개수를 반환
-            int hitCount = Physics.OverlapSphereNonAlloc(nextPosition, myRadius, hitColliders, planetLayer);
+
+            // 2-1. 사전 검사: 다음 주기 동안 접근 가능한 거리만큼 넓힌 반경에 다른 행성이 있는지만 확인
+            if (Time.time >= nextBroadphaseTime)
+            {
+                nextBroadphaseTime = Time.time + collisionBroadphaseInterval;
+                // shortcut: 상대 행성이 내 속도의 2배 이하로 움직인다고 가정한 여유 거리, 고속 행성이 생기면 주기를 줄이거나 여유를 키울 것
+                float mySpeed = Mathf.Max(networkVelocity.magnitude, visualVelocity.magnitude);
+                float margin = mySpeed * collisionBroadphaseInterval * 3f + myRadius;
+                int nearCount = Physics.OverlapSphereNonAlloc(transform.position, myRadius + margin, hitColliders, planetLayer);
+                hasNearbyPlanet = nearCount > 1 || (nearCount == 1 && hitColliders[0].gameObject != gameObject);
+            }
+
+            // 2-2. 정밀 검사: 주변에 행성이 있을 때만 매 프레임 수행 (보정 로직은 기존과 동일)
+            int hitCount = hasNearbyPlanet
+                ? Physics.OverlapSphereNonAlloc(nextPosition, myRadius, hitColliders, planetLayer)
+                : 0;
 
             for (int i = 0; i < hitCount; i++)
             {

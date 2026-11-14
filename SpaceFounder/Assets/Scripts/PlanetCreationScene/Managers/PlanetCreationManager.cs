@@ -42,7 +42,12 @@ public class PlanetCreationManager : MonoBehaviour
             launchButton.onClick.AddListener(OnLaunchClicked);
 
         if (planetNameInput != null)
+        {
             planetNameInput.onValueChanged.AddListener(ValidateInput);
+            planetNameInput.onSelect.AddListener(DisableIme);
+            planetNameInput.onDeselect.AddListener(EnableIme);
+        }
+        Input.imeCompositionMode = IMECompositionMode.On;
 
         if (logoutButton != null)
             logoutButton.onClick.AddListener(OnLogoutButtonClicked);
@@ -51,23 +56,20 @@ public class PlanetCreationManager : MonoBehaviour
         ValidateInput(planetNameInput.text);
     }
 
-    private void Update()
-    {
-        if (planetNameInput.isFocused)
-        {
-            Input.imeCompositionMode = IMECompositionMode.Off;
-        }
-        else
-        {
-            Input.imeCompositionMode = IMECompositionMode.On;
-        }
-    }
+    private void DisableIme(string _) => Input.imeCompositionMode = IMECompositionMode.Off;
+    private void EnableIme(string _) => Input.imeCompositionMode = IMECompositionMode.On;
 
     private void OnDestroy()
     {
         if (generateRandomButton != null) generateRandomButton.onClick.RemoveListener(GenerateNewPlanet);
         if (launchButton != null) launchButton.onClick.RemoveListener(OnLaunchClicked);
-        if (planetNameInput != null) planetNameInput.onValueChanged.RemoveListener(ValidateInput);
+        if (logoutButton != null) logoutButton.onClick.RemoveListener(OnLogoutButtonClicked);
+        if (planetNameInput != null)
+        {
+            planetNameInput.onValueChanged.RemoveListener(ValidateInput);
+            planetNameInput.onSelect.RemoveListener(DisableIme);
+            planetNameInput.onDeselect.RemoveListener(EnableIme);
+        }
     }
 
     private void ValidateInput(string text)

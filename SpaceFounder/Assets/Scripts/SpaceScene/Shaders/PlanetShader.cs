@@ -20,6 +20,11 @@ public class PlanetShader : MonoBehaviour
     public static HashSet<PlanetShader> ActiveStars = new HashSet<PlanetShader>();
     private bool isStar = false;
 
+    // 항성 거리 정렬/조명 갱신 주기. 항성은 멀리 있어 방향 변화가 느리므로 매 프레임 갱신할 필요 없음
+    [SerializeField] private float lightUpdateInterval = 0.1f;
+    private float nextLightUpdateTime = 0f; // 0이면 첫 Update에서 즉시 계산
+    private static readonly System.Comparison<KeyValuePair<float, PlanetShader>> CompareByDistance = (x, y) => x.Key.CompareTo(y.Key);
+
     private void Awake()
     {
         planetRenderer = GetComponent<Renderer>();
@@ -88,6 +93,8 @@ public class PlanetShader : MonoBehaviour
     private void Update()
     {
         if (isStar || ActiveStars.Count == 0) return;
+        if (Time.time < nextLightUpdateTime) return;
+        nextLightUpdateTime = Time.time + lightUpdateInterval;
 
         // 매 프레임 할당하던 리스트를 비우고 재사용
         sortedStars.Clear();
@@ -100,7 +107,7 @@ public class PlanetShader : MonoBehaviour
         }
 
         // 거리 기준 오름차순 정렬
-        sortedStars.Sort((x, y) => x.Key.CompareTo(y.Key));
+        sortedStars.Sort(CompareByDistance);
 
         // 배열 초기화
         for (int i = 0; i < 3; i++)

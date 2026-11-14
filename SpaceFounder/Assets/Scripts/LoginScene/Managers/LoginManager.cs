@@ -35,12 +35,17 @@ public class LoginManager : MonoBehaviour
         if (emailInput != null)
         {
             emailInput.onValueChanged.AddListener(OnInputValueChanged);
+            emailInput.onSelect.AddListener(DisableIme);
+            emailInput.onDeselect.AddListener(EnableIme);
         }
         if (passwordInput != null)
         {
             passwordInput.asteriskChar = '•';
             passwordInput.onValueChanged.AddListener(OnInputValueChanged);
+            passwordInput.onSelect.AddListener(DisableIme);
+            passwordInput.onDeselect.AddListener(EnableIme);
         }
+        Input.imeCompositionMode = IMECompositionMode.On;
 
         // 패널 변경 이벤트 등록
         if (goToSignUpButton != null)
@@ -73,10 +78,14 @@ public class LoginManager : MonoBehaviour
         if (emailInput != null)
         {
             emailInput.onValueChanged.RemoveListener(OnInputValueChanged);
+            emailInput.onSelect.RemoveListener(DisableIme);
+            emailInput.onDeselect.RemoveListener(EnableIme);
         }
         if (passwordInput != null)
         {
             passwordInput.onValueChanged.RemoveListener(OnInputValueChanged);
+            passwordInput.onSelect.RemoveListener(DisableIme);
+            passwordInput.onDeselect.RemoveListener(EnableIme);
         }
         if (goToSignUpButton != null)
         {
@@ -88,17 +97,9 @@ public class LoginManager : MonoBehaviour
         }
     }
 
-    private void Update()
-    {
-        if (emailInput.isFocused || passwordInput.isFocused)
-        {
-            Input.imeCompositionMode = IMECompositionMode.Off;
-        }
-        else
-        {
-            Input.imeCompositionMode = IMECompositionMode.On;
-        }
-    }
+    // 입력 필드 포커스 시 IME(한글 조합) 비활성화, 포커스 해제 시 복구
+    private void DisableIme(string _) => Input.imeCompositionMode = IMECompositionMode.Off;
+    private void EnableIme(string _) => Input.imeCompositionMode = IMECompositionMode.On;
 
     // 텍스트가 변경될 때마다 호출
     private void OnInputValueChanged(string text)

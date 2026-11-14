@@ -39,21 +39,21 @@ public class SignUpManager : MonoBehaviour
         if (emailInput != null) emailInput.onValueChanged.AddListener(ValidateEmail);
         if (passwordInput != null) passwordInput.onValueChanged.AddListener(ValidatePassword);
 
+        // 입력 필드 포커스 시 IME 비활성화 (기존 Update 폴링 대체)
+        foreach (var field in new[] { usernameInput, emailInput, passwordInput })
+        {
+            if (field == null) continue;
+            field.onSelect.AddListener(DisableIme);
+            field.onDeselect.AddListener(EnableIme);
+        }
+        Input.imeCompositionMode = IMECompositionMode.On;
+
         ClearAllErrorTexts();
         UpdateButtonState();
     }
 
-    private void Update()
-    {
-        if (usernameInput.isFocused || emailInput.isFocused || passwordInput.isFocused)
-        {
-            Input.imeCompositionMode = IMECompositionMode.Off;
-        }
-        else
-        {
-            Input.imeCompositionMode = IMECompositionMode.On;
-        }
-    }
+    private void DisableIme(string _) => Input.imeCompositionMode = IMECompositionMode.Off;
+    private void EnableIme(string _) => Input.imeCompositionMode = IMECompositionMode.On;
 
     private void OnDestroy()
     {
@@ -61,6 +61,13 @@ public class SignUpManager : MonoBehaviour
         if (usernameInput != null) usernameInput.onValueChanged.RemoveListener(ValidateUsername);
         if (emailInput != null) emailInput.onValueChanged.RemoveListener(ValidateEmail);
         if (passwordInput != null) passwordInput.onValueChanged.RemoveListener(ValidatePassword);
+
+        foreach (var field in new[] { usernameInput, emailInput, passwordInput })
+        {
+            if (field == null) continue;
+            field.onSelect.RemoveListener(DisableIme);
+            field.onDeselect.RemoveListener(EnableIme);
+        }
     }
 
     private void ValidateUsername(string text)

@@ -29,6 +29,12 @@ public class UserProfileUI : MonoBehaviour
         logoutButton.onClick.AddListener(OnLogoutClicked);
     }
 
+    private void OnDestroy()
+    {
+        if (profileButton != null) profileButton.onClick.RemoveListener(TogglePanel);
+        if (logoutButton != null) logoutButton.onClick.RemoveListener(OnLogoutClicked);
+    }
+
     private void Update()
     {
         // 패널이 켜져 있을 때 좌클릭이 발생하면 위치 검사

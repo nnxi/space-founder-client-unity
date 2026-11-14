@@ -62,16 +62,28 @@ public class CameraController : MonoBehaviour
         currentDistance = initialDistance;
         SyncRotationVariables();
 
-        // UI 버튼 클릭 이벤트 연결
-        if (followButton != null) followButton.onClick.AddListener(() => SwitchMode(CameraMode.Follow));
-        if (orbitButton != null) orbitButton.onClick.AddListener(() => SwitchMode(CameraMode.Orbit));
-        if (freeButton != null) freeButton.onClick.AddListener(() => SwitchMode(CameraMode.Free));
+        // UI 버튼 클릭 이벤트 연결 (해제를 위해 람다 대신 메서드 사용)
+        if (followButton != null) followButton.onClick.AddListener(OnFollowClicked);
+        if (orbitButton != null) orbitButton.onClick.AddListener(OnOrbitClicked);
+        if (freeButton != null) freeButton.onClick.AddListener(OnFreeClicked);
 
         // 초기 UI 상태 적용
         UpdateUI();
     }
 
-    private void Update()
+    private void OnDestroy()
+    {
+        if (followButton != null) followButton.onClick.RemoveListener(OnFollowClicked);
+        if (orbitButton != null) orbitButton.onClick.RemoveListener(OnOrbitClicked);
+        if (freeButton != null) freeButton.onClick.RemoveListener(OnFreeClicked);
+    }
+
+    private void OnFollowClicked() => SwitchMode(CameraMode.Follow);
+    private void OnOrbitClicked() => SwitchMode(CameraMode.Orbit);
+    private void OnFreeClicked() => SwitchMode(CameraMode.Free);
+
+    // 행성 이동(PlanetController.Update)과 월드 시프트(CameraChunkTracker.Update) 이후 카메라를 갱신하여 지터 방지
+    private void LateUpdate()
     {
         HandleModeSwitch();
 
